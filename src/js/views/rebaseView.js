@@ -1,13 +1,11 @@
 var GitError = require('../util/errors').GitError;
 var _ = require('underscore');
 var Q = require('q');
-// horrible hack to get localStorage Backbone plugin
-var Backbone = (!require('../util').isBrowser()) ? require('backbone') : window.Backbone;
+var Backbone = require('backbone');
 
 var ModalTerminal = require('../views').ModalTerminal;
 var ContainedBase = require('../views').ContainedBase;
 var ConfirmCancelView = require('../views').ConfirmCancelView;
-var LeftRightView = require('../views').LeftRightView;
 
 var InteractiveRebaseView = ContainedBase.extend({
   tagName: 'div',
@@ -17,6 +15,7 @@ var InteractiveRebaseView = ContainedBase.extend({
     this.deferred = options.deferred;
     this.rebaseMap = {};
     this.entryObjMap = {};
+    this.options = options;
 
     this.rebaseEntries = new RebaseEntryCollection();
     options.toRebase.reverse();
@@ -38,10 +37,23 @@ var InteractiveRebaseView = ContainedBase.extend({
 
     // show the dialog holder
     this.show();
+
+    if (options.aboveAll) {
+      // TODO fix this :(
+      $('#canvasHolder').css('display', 'none');
+    }
+  },
+
+  restoreVis: function() {
+    // restore the absolute position canvases
+    $('#canvasHolder').css('display', 'inherit');
   },
 
   confirm: function() {
     this.die();
+    if (this.options.aboveAll) {
+      this.restoreVis();
+    }
 
     // get our ordering
     var uiOrder = [];
@@ -66,7 +78,8 @@ var InteractiveRebaseView = ContainedBase.extend({
 
   render: function() {
     var json = {
-      num: _.keys(this.rebaseMap).length
+      num: _.keys(this.rebaseMap).length,
+      solutionOrder: this.options.initialCommitOrdering
     };
 
     var destination = this.container.getInsideElement();
@@ -92,18 +105,25 @@ var InteractiveRebaseView = ContainedBase.extend({
     this.makeButtons();
   },
 
+  cancel: function() {
+    // empty array does nothing, just like in git
+    this.hide();
+    if (this.options.aboveAll) {
+      this.restoreVis();
+    }
+    this.deferred.resolve([]);
+  },
+
   makeButtons: function() {
     // control for button
     var deferred = Q.defer();
     deferred.promise
-    .then(_.bind(function() {
+    .then(function() {
       this.confirm();
-    }, this))
-    .fail(_.bind(function() {
-      // empty array does nothing, just like in git
-      this.hide();
-      this.deferred.resolve([]);
-    }, this))
+    }.bind(this))
+    .fail(function() {
+      this.cancel();
+    }.bind(this))
     .done();
 
     // finally get our buttons
@@ -150,9 +170,9 @@ var RebaseEntryView = Backbone.View.extend({
     // hacky :( who would have known jquery barfs on ids with %'s and quotes
     this.listEntry = this.$el.children(':last');
 
-    this.listEntry.delegate('#toggleButton', 'click', _.bind(function() {
+    this.listEntry.delegate('#toggleButton', 'click', function() {
       this.toggle();
-    }, this));
+    }.bind(this));
   }
 });
 

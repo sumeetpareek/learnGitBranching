@@ -10,6 +10,8 @@ var Errors = require('../util/errors');
 var Visualization = require('../visuals/visualization').Visualization;
 var ParseWaterfall = require('../level/parseWaterfall').ParseWaterfall;
 var Level = require('../level').Level;
+var LocaleStore = require('../stores/LocaleStore');
+var LevelStore = require('../stores/LevelStore');
 
 var Command = require('../models/commandModel').Command;
 var GitShim = require('../git/gitShim').GitShim;
@@ -42,19 +44,31 @@ var parse = util.genParseCommand(regexMap, 'processLevelBuilderCommand');
 var LevelBuilder = Level.extend({
   initialize: function(options) {
     options = options || {};
-    options.level = options.level || {};
+    options.level = {};
 
-    var locale = intl.getLocale();
+    var locale = LocaleStore.getLocale();
     options.level.startDialog = {};
     options.level.startDialog[locale] = {
       childViews: intl.getDialog(require('../dialogs/levelBuilder'))
     };
+
+    // if we are editing a level our behavior is a bit different
+    var editLevelJSON;
+    if (options.editLevel) {
+      LevelStore.getLevel(options.editLevel);
+      options.level = editLevelJSON;
+    }
+
     LevelBuilder.__super__.initialize.apply(this, [options]);
+    if (!options.editLevel) {
+      this.startDialogObj = undefined;
+      this.definedGoal = false;
+    } else {
+      this.startDialogObj = editLevelJSON.startDialog[locale];
+      this.definedGoal = true;
+    }
 
-    this.startDialogObj = undefined;
-    this.definedGoal = false;
-
-    // we wont be using this stuff, and its to delete to ensure we overwrite all functions that
+    // we wont be using this stuff, and it is deleted to ensure we overwrite all functions that
     // include that functionality
     delete this.treeCompare;
     delete this.solved;
@@ -62,19 +76,50 @@ var LevelBuilder = Level.extend({
 
   initName: function() {
     this.levelToolbar = new LevelToolbar({
-      name: intl.str('level-builder')
+      name: intl.str('level-builder'),
+      parent: this
     });
   },
 
   initGoalData: function() {
-    // add some default behavior in the beginning
-    this.level.goalTreeString = '{"branches":{"master":{"target":"C1","id":"master"},"makeLevel":{"target":"C2","id":"makeLevel"}},"commits":{"C0":{"parents":[],"id":"C0","rootCommit":true},"C1":{"parents":["C0"],"id":"C1"},"C2":{"parents":["C1"],"id":"C2"}},"HEAD":{"target":"makeLevel","id":"HEAD"}}';
-    this.level.solutionCommand = 'git checkout -b makeLevel; git commit';
+    // add some default behavior in the beginning if we are not editing
+    if (!this.options.editLevel) {
+      this.level.goalTreeString = '{"branches":{"master":{"target":"C1","id":"master"},"makeLevel":{"target":"C2","id":"makeLevel"}},"commits":{"C0":{"parents":[],"id":"C0","rootCommit":true},"C1":{"parents":["C0"],"id":"C1"},"C2":{"parents":["C1"],"id":"C2"}},"HEAD":{"target":"makeLevel","id":"HEAD"}}';
+      this.level.solutionCommand = 'git checkout -b makeLevel; git commit';
+    }
     LevelBuilder.__super__.initGoalData.apply(this, arguments);
+  },
+
+  /**
+   * need custom handlers since we have two visualizations >___<
+   */
+  minimizeGoal: function (position, size) {
+    this.doBothVis('hide');
+    this.goalWindowPos = position;
+    this.goalWindowSize = size;
+    this.levelToolbar.$goalButton.text(intl.str('show-goal-button'));
+    if ($('#goalPlaceholder').is(':visible')) {
+      $('#goalPlaceholder').hide();
+      this.mainVis.myResize();
+    }
+  },
+
+  doBothVis: function(method) {
+    if (this.startVis) {
+      this.startVis[method].call(this.startVis);
+    }
+    if (this.goalVis) {
+      this.goalVis[method].call(this.goalVis);
+    }
+  },
+
+  resizeGoal: function () {
+    this.doBothVis('myResize');
   },
 
   initStartVisualization: function() {
     this.startCanvasHolder = new CanvasTerminalHolder({
+      parent: this,
       additionalClass: 'startTree',
       text: intl.str('hide-start')
     });
@@ -84,6 +129,7 @@ var LevelBuilder = Level.extend({
       containerElement: this.startCanvasHolder.getCanvasLocation(),
       treeString: this.level.startTree,
       noKeyboardInput: true,
+      smallCanvas: true,
       noClick: true
     });
     return this.startCanvasHolder;
@@ -226,9 +272,9 @@ var LevelBuilder = Level.extend({
       deferred: whenDoneEditing
     });
     whenDoneEditing.promise
-    .then(_.bind(function(levelObj) {
+    .then(function(levelObj) {
       this.startDialogObj = levelObj;
-    }, this))
+    }.bind(this))
     .fail(function() {
       // nothing to do, they dont want to edit it apparently
     })
@@ -242,7 +288,7 @@ var LevelBuilder = Level.extend({
   },
 
   finish: function(command, deferred) {
-    if (!this.gitCommandsIssued.length || !this.definedGoal) {
+    if (!this.options.editLevel && (!this.gitCommandsIssued.length || !this.definedGoal)) {
       command.set('error', new Errors.GitError({
         msg: intl.str('solution-empty')
       }));
@@ -270,10 +316,10 @@ var LevelBuilder = Level.extend({
         ]
       });
       askForHintView.getPromise()
-      .then(_.bind(this.defineHint, this))
-      .fail(_.bind(function() {
+      .then(this.defineHint.bind(this))
+      .fail(function() {
         this.level.hint = {'en_US': ''};
-      }, this))
+      }.bind(this))
       .done(function() {
         askForHintDeferred.resolve();
       });
@@ -291,13 +337,13 @@ var LevelBuilder = Level.extend({
         ]
       });
       askForStartView.getPromise()
-      .then(_.bind(function() {
+      .then(function() {
         // oh boy this is complex
         var whenEditedDialog = Q.defer();
         // the undefined here is the command that doesnt need resolving just yet...
         this.editDialog(undefined, whenEditedDialog);
         return whenEditedDialog.promise;
-      }, this))
+      }.bind(this))
       .fail(function() {
         // if they dont want to edit the start dialog, do nothing
       })
@@ -306,14 +352,14 @@ var LevelBuilder = Level.extend({
       });
     }
 
-    chain = chain.done(_.bind(function() {
+    chain = chain.done(function() {
       // ok great! lets just give them the goods
       new MarkdownPresenter({
         fillerText: JSON.stringify(this.getExportObj(), null, 2),
         previewText: intl.str('share-json')
       });
       command.finishWith(deferred);
-    }, this));
+    }.bind(this));
 
     masterDeferred.resolve();
   },

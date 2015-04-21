@@ -1,11 +1,11 @@
-<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01//EN"
+﻿<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01//EN"
    "http://www.w3.org/TR/html4/strict.dtd">
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=800, initial-scale=0.25">
   <title>Learn Git Branching</title>
-	<meta name="author" content="Peter Cottle">
+  <meta name="author" content="Peter Cottle">
 
   <meta property="og:title" content="Learn Git Branching"/>
   <meta property="og:type" content="website"/>
@@ -13,10 +13,18 @@
   <meta property="og:image" content="http://pcottle.github.io/learnGitBranching/assets/learnGitBranching.png"/>
   <meta property="og:description" content="A interactive Git visualization tool to educate and challenge!"/>
 
-	<link rel="stylesheet" href="build/{{styleFile}}" type="text/css" charset="utf-8">
-	<link rel="stylesheet" href="src/style/font-awesome.css" type="text/css" charset="utf-8">
+  <link rel="stylesheet" href="build/{{styleFile}}" type="text/css" charset="utf-8">
+  <link rel="stylesheet" href="src/style/font-awesome.css" type="text/css" charset="utf-8">
+  <link rel="stylesheet" href="src/style/rainbows.css" type="text/css" charset="utf-8">
 </head>
 <body>
+  <!-- lol noscript. I did not write 9k+ lines of JS just for you to bounce off my website -->
+  <noscript>
+    <div style="z-index:1000000;background:red;color:white;position:absolute;top:0;left:0;height:300px;width:300px;">
+      This application simulates a git repository in your browser, so you will need
+      JS to use the app. Try enabling and refreshing the page -- Thanks!
+    </div>
+  </noscript>
 
   <!-- The entire interface is within this div -->
   <div id="interfaceWrapper" class="box horizontal flex1">
@@ -39,11 +47,14 @@
             </div>
             <div>
               <i class="icon-home"></i>
-              <span class="intl-aware" data-intl="learn-git-branching">
+              <span class="vcs-mode-aware intl-aware" data-intl="learn-git-branching">
                 Learn Git Branching
               </span>
             </div>
           </div>
+          <div id="levelToolbarMount">
+          </div>
+
         <div id="terminal" class="box flex1 horizontal startAlign">
           <div id="commandDisplay" class="box vertical flex1">
           </div>
@@ -57,78 +68,61 @@
           </div>
           <textarea id="commandTextField"></textarea>
         </div>
+
       </div>
     </div>
 
-    <div id="mainVisSpace" class="box flex1 horizontal visBackgroundColor">
+    <div id="mainVisSpace" class="box flex2 horizontal transitionAll visBackgroundColor">
+      <span class="modeText transitionOpacity gitMode">
+        Git
+      </span>
+      <span class="modeText transitionOpacity hgMode">
+        Hg
+      </span>
     </div>
+
+    <!-- If you drag the goal window to the right side of the screen, this gets shown and causes
+         the main visualization to squeeze a bit. This way, you could have the goal window hang out
+         on the right side of the screen and still see the repo visualization. -->
+    <div id="goalPlaceholder" class="box flex1 visBackgroundColor" style="display: none;"></div>
+
   </div>
 
   <div id="canvasHolder">
+  </div>
 
+  <div id="reactMount">
+  </div>
+
+  <div id="helperBarMount">
   </div>
 
   <!-- lol inline styles -->
-  <a href="https://github.com/pcottle/learnGitBranching" target="_blank" style="z-index: 99; position: fixed; top: 0; right: 0">
-    <img style="position: absolute; top: 0; right: 0; border: 0;" src="https://s3.amazonaws.com/github/ribbons/forkme_right_darkblue_121621.png" alt="Fork me on GitHub">
+  <a class="githubLink" href="https://github.com/pcottle/learnGitBranching" target="_blank">
+    <img
+      style="position: absolute; top: 0; right: 0; border: 0;"
+      src="assets/forkme_right_darkblue_121621.png"
+      alt="Fork me on GitHub"
+    />
   </a>
 
   <!-- Dependencies -->
-  <script src="lib/jquery-1.8.0.min.js"></script>
+  <script type="text/javascript">
+    // PhantomJS doesn't support bind yet LOL. polyfill locally so tests
+    // can pass while offline
+    Function.prototype.bind = Function.prototype.bind || function (thisp) {
+      var fn = this;
+      return function () {
+        return fn.apply(thisp, arguments);
+      };
+    };
+  </script>
+
+  {{jsDependencies}}
+
   <script src="lib/jquery-ui-1.9.0.custom.min.js"></script>
-  <script src="lib/underscore-min.js"></script>
-  <script src="lib/backbone-min.js"></script>
-  <script src="lib/backbone.localStorage-min.js"></script>
-  <script src="lib/raphael-min.js"></script>
 
-  <!-- Templates from here on out. Someone seriously needs to fix template
-       management for node.js apps. I know there is the text plugin
-       for requireJS but that's lame. For now, they are all listed here... -->
-  <script type="text/html" id="command-template">
-       <p class="commandLine transitionBackground <%= status %>">
-        <span class="prompt">$</span>
-        <%= rawStr %>
-        <span class="icons transitionAllSlow">
-          <i class="icon-exclamation-sign"></i>
-          <i class="icon-check-empty"></i>
-          <i class="icon-retweet"></i>
-          <i class="icon-check"></i>
-        </span>
-      </p>
-
-      <div class="commandLineResult <%= resultType %>">
-        <%= result %>
-      </div>
-
-      <div class="commandLineWarnings">
-        <%= formattedWarnings %>
-      </div>
-  </script>
-
-  <script type="text/html" id="helper-bar-template">
-    <% for(var i = 0; i < items.length; i++) { %>
-      <% if (items[i].text) { %>
-        <a data-id="<%= items[i].id %>"><%= items[i].text %></a>
-      <% } else { %>
-        <a data-id="<%= items[i].id %>">
-          <i data-id="<%= items[i].id %>" class="icon-<%= items[i].icon %>"></i>
-        </a>
-      <% } %>
-    <% } %>
-  </script>
-
-  <script type="text/html" id="level-toolbar-template">
-    <div class="toolbar level-toolbar box vertical center transitionAll hidden">
-      <div>
-        <i class="icon-bolt"></i>
-          Level
-            <span class="levelToolbarSpan">
-              <%= name %>
-            </span>
-      </div>
-    </div>
-  </script>
-
+  <!-- Templates from here on out... -->
   <script type="text/html" id="modal-view-template">
     <div class="contentHolder box vertical center flex1">
     </div>
@@ -166,16 +160,14 @@
         </div>
       </div>
     </div>
-    <div class="box flex3">
-    </div>
   </script>
 
   <script type="text/html" id="terminal-window-template">
     <div class="terminal-window box horizontal flex3 transitionAll">
-      <div class="box flex3">
-      </div>
-
-      <div class="terminal-window-holder box flex10 vertical transitionTransform">
+    <div class="box flex3">
+    </div>
+    <div class="terminal-window-holder box flex10 vertical transitionTransform">
+      <div class="wrapper box vertical">
         <div class="toolbar box vertical center">
           <div class="controls box horizontal justify">
             <div class="box flex1">
@@ -200,6 +192,7 @@
         <div class="inside">
         </div>
       </div>
+    </div>
 
       <div class="box flex2">
       </div>
@@ -207,6 +200,19 @@
   </script>
 
   <script type="text/html" id="level-dropdown-view">
+    <div class="box horizontal center levelDropdownTabWrapper">
+      <% for (var i = 0; i < tabs.length; i++) { %>
+        <% if (tabs[i].id === selectedTab) { %>
+          <div class="levelDropdownTab" data-id="<%=tabs[i].id%>">
+        <% } else { %>
+          <div class="levelDropdownTab deselected" data-id="<%=tabs[i].id%>">
+        <% } %>
+          <span data-id="<%=tabs[i].id%>">
+            <%= tabs[i].name %>
+          </span>
+        </div>
+      <% } %>
+    </div>
   </script>
 
   <script type="text/html" id="series-view">
@@ -368,6 +374,12 @@
       <p>
         Rebasing <%= num %> Commits
       </p>
+      <% if (solutionOrder && solutionOrder.length) { %>
+        <p class="solutionText">
+          For the solution, order the commits as
+            <%= solutionOrder.join(', ') %>
+        </p>
+      <% } %>
       <p class="helperText">
         (Drag and drop to re-order. Toggle the "pick" button to omit or re-add a commit)
       </p>
@@ -383,20 +395,27 @@
   </script>
 
   <script type="text/html" id="left-right-template">
-    <% if (showLeft) { %>
-      <div class="box left">
+    <% if (!showLeft && lastNav ) { %>
+      <div class="box right">
+        <i class="icon-ok exit"></i>
+      </div>
     <% } else { %>
-      <div class="box left hideLeft">
-    <% } %>
-      <i class="icon-circle-arrow-left"></i>
-    </div>
-    <div class="box right">
-      <% if (!lastNav) { %>
-        <i class="icon-circle-arrow-right"></i>
+      <% if (showLeft) { %>
+        <div class="box left">
+          <i class="icon-circle-arrow-left"></i>
       <% } else { %>
-        <i class="icon-ok"></i>
+        <div class="box exit">
+          <i class="icon-signout"></i>
       <% } %>
-    </div>
+      </div>
+      <div class="box right">
+        <% if (!lastNav) { %>
+          <i class="icon-circle-arrow-right"></i>
+        <% } else { %>
+          <i class="icon-ok"></i>
+        <% } %>
+      </div>
+    <% } %>
   </script>
 
   <script type="text/html" id="confirm-cancel-template">
@@ -421,7 +440,6 @@
       </div>
     </li>
   </script>
-
   <!-- The compiled and minified build file (that actually does everything) is below.
        For a much easier time perusing the source, see the individual files at:
           https://github.com/pcottle/learnGitBranching
@@ -430,7 +448,29 @@
 
   <!-- The advantage of github pages: super-easy, simple, slick static hostic.
        The downside? No raw logs to parse for analytics, so I have to include
-       Google analytics :-/ -->
+       Google analytics :-/ Also FB custom audiences-->
+  <script>
+    (function() {
+      var _fbq = window._fbq || (window._fbq = []);
+      if (!_fbq.loaded) {
+        var fbds = document.createElement('script');
+        fbds.async = true;
+        fbds.src = '//connect.facebook.net/en_US/fbds.js';
+        var s = document.getElementsByTagName('script')[0];
+        s.parentNode.insertBefore(fbds, s);
+        _fbq.loaded = true;
+      }
+      _fbq.push(['addPixelId', '1376649522580546']);
+    })();
+    window._fbq = window._fbq || [];
+    window._fbq.push(['track', 'PixelInitialized', {}]);
+  </script>
+  <noscript>
+    <img height="1" width="1" border="0" alt="" style="display:none"
+      src="https://www.facebook.com/tr?id=1376649522580546&amp;ev=NoScript"
+    />
+  </noscript>
+
   <script type="text/javascript">
     var _gaq = _gaq || [];
     _gaq.push(['_setAccount', 'UA-37500646-1']);
@@ -443,4 +483,3 @@
   </script>
 </body>
 </html>
-

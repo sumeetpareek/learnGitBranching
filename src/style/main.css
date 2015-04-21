@@ -10,7 +10,7 @@ body {
 }
 
 html, body {
-  font-family: Monaco, Courier, font-monospace;
+  font-family: Monaco, Courier, monospace;
   color: #eee;
 }
 
@@ -28,11 +28,31 @@ p {
   word-wrap: break-word;
 }
 
+.fwber {
+  font-weight: bolder;
+  font-size: 18px;
+}
+
+.githubLink {
+  z-index: 2;
+  position: fixed;
+  top: 0;
+  right: 0;
+}
+
+@media (max-width: 700px) {
+  .githubLink {
+    display: none !important;
+  }
+}
+
 div.modalTerminal a {
   color: rgb(253, 152, 209);
   font-weight: bold;
 }
 
+
+div.modalTerminal li,
 div.modalTerminal p {
   line-height: 24px;
   margin: 1.5em 0;
@@ -46,38 +66,39 @@ div.modalTerminal p {
 html,
 body,
 .box {
-  display: box;
+  display: flex;
   display: -moz-box;
   display: -webkit-box;
+  display: -ms-flexbox;
 }
 
 body,
 .flex1 {
   -webkit-box-flex: 1;
   -moz-box-flex: 1;
-  -ms-box-flex: 1;
-  box-flex: 1;
+  -ms-flex: 1.0 1.0 auto;
+  flex: 1 1 auto;
 }
 
 .flex2 {
   -webkit-box-flex: 2;
   -moz-box-flex: 2;
-  -ms-box-flex: 2;
-  box-flex: 2;
+  -ms-flex: 2.0 2.0 auto;
+  flex: 2 2 auto;
 }
 
 .flex3 {
   -webkit-box-flex: 3;
   -moz-box-flex: 3;
-  -ms-box-flex: 3;
-  box-flex: 3;
+  -ms-flex: 3.0 3.0 auto;
+  flex: 3 3 auto;
 }
 
 .flex10 {
   -webkit-box-flex: 10;
   -moz-box-flex: 10;
-  -ms-box-flex: 10;
-  box-flex: 10;
+  -ms-flex: 10.0 10.0 auto;
+  flex: 10 10 auto;
 }
 
 html,
@@ -85,43 +106,43 @@ body,
 .vertical {
   -webkit-box-orient: vertical;
   -moz-box-orient: vertical;
-  -ms-box-orient: vertical;
-  box-orient: vertical;
+  -ms-flex-direction: column;
+  flex-direction: column;
 }
 
 .horizontal {
   -webkit-box-orient: horizontal;
   -moz-box-orient: horizontal;
-  -ms-box-orient: horizontal;
-  box-orient: horizontal;
+  -ms-flex-direction: row;
+  flex-direction: row;
 }
 
 .centerAlign {
   -webkit-box-align: center;
   -moz-box-align: center;
-  -ms-box-align: center;
-  box-align: center;
+  -ms-flex-align: center;
+  justify-content	: center;
 }
 
 .startAlign {
   -webkit-box-align: start;
   -moz-box-align: start;
-  -ms-box-align: start;
-  box-align: start;
+  -ms-flex-align: start;
+  justify-content: flex-start;
 }
 
 .center {
   -webkit-box-pack: center;
   -moz-box-pack: center;
-  -ms-box-pack: center;
-  box-pack: center;
+  -ms-flex-pack: center;
+  align-content: center;
 }
 
 .justify {
   -webkit-box-pack: justify;
   -moz-box-pack: justify;
-  -ms-box-pack: justify;
-  box-pack: justify;
+  -ms-flex-pack: justify;
+  align-content: stretch;
 }
 
 /* Transition */
@@ -166,6 +187,7 @@ body,
   transition: opacity 1700ms cubic-bezier(0.260, 0.860, 0.440, 0.985);
 }
 
+.visBackgroundColor,
 .transitionAll {
   -webkit-transition: all 700ms cubic-bezier(0.260, 0.860, 0.440, 0.985);
   -moz-transition: all 700ms cubic-bezier(0.260, 0.860, 0.440, 0.985);
@@ -182,14 +204,32 @@ body,
   transition: all 1700ms cubic-bezier(0.260, 0.860, 0.440, 0.985);
 }
 
+/* mode stuff */
+#mainVisSpace {
+  position: relative;
+}
+
+#mainVisSpace .modeText {
+  position: absolute;
+  bottom: 0;
+  opacity: 0.0;
+  font-size: 60pt;
+  color: black;
+}
+
+body.gitMode #mainVisSpace .modeText.gitMode,
+body.hgMode #mainVisSpace .modeText.hgMode {
+  opacity: 0.5;
+}
+
 /* Some interface things */
 
 div.canvasTerminalHolder {
-  width: 100%;
-  height: 100%;
+  height: 0;
   position: fixed;
   top: 0;
   left: 0;
+  z-index: 3;
 }
 
 #canvasHolder {
@@ -205,35 +245,22 @@ div.gitDemonstrationView > div.visHolder,
   background-color: #5cbcfc;
 }
 
+body.hgMode div.gitDemonstrationView > div.visHolder,
+body.hgMode .visBackgroundColor {
+  background: #5CFCD6;
+  background-color: #5CFCD6;
+}
+
 #interfaceWrapper {
   min-width: 600px;
   min-height: 600px;
 }
 
-div.canvasTerminalHolder > div.terminal-window-holder {
-  margin: 100px 0;
-  height: 100%;
-  -webkit-transform: translate3d(0,0,0);
-  -moz-transform: translate3d(0,0,0);
-  -o-transform: translate3d(0,0,0);
-  -ms-transform: translate3d(0,0,0);
-  transform: translate3d(0,0,0);
-}
-
-div.canvasTerminalHolder > div.terminal-window-holder.slideOut {
-  -webkit-transform: translate3d(-150%,0,0);
-  -moz-transform: translate3d(-150%,0,0);
-  -o-transform: translate3d(-150%,0,0);
-  -ms-transform: translate3d(-150%,0,0);
-  transform: translate3d(-150%,0,0);
-}
-
-
 div.canvasTerminalHolder > div.terminal-window-holder > div.wrapper {
-  margin: 0 20px 0px 20px;
-  height: 80%;
-  box-shadow: 0 0 30px rgb(0,0,0);
+  height: 100%;
+  box-shadow: 0 0 12px rgb(0,0,0);
   cursor: pointer;
+  border-radius: 0 0 5px 5px;
 }
 
 div.canvasTerminalHolder > div.terminal-window-holder div.terminal-text {
@@ -267,10 +294,11 @@ div.canvasTerminalHolder > div.terminal-window-holder div.inside {
 
 div.canvasTerminalHolder > div.terminal-window-holder {
   max-width: 500px;
+  min-width: 500px;
+  overflow: visible !important;
 }
 
 /* Toolbar */
-
 div.toolbar {
   /* borrowed from try.github.com along with a bunch of other things */
   background-image: -webkit-linear-gradient(top, #EFEDEE, #C1C1C1);
@@ -299,7 +327,56 @@ div.toolbar.level-toolbar {
   background-image: -ms-linear-gradient(top, #B2FF2E, #8AD247);
   background-image: linear-gradient(top, #B2FF2E, #8AD247);
   border-radius: 0;
-  height: 50px;
+  height: inherit;
+  font-size: 12px;
+  position: relative;
+}
+
+div.toolbar.level-toolbar button {
+  font-size: 12px;
+  border: 1px solid #888;
+  border-radius: 4px;
+  padding: 4px 8px;
+  background-image: -webkit-linear-gradient(top, #EFEDEE, #C1C1C1);
+}
+
+div.toolbar div.clearfix {
+  zoom: 1;
+  margin: 10px 0;
+}
+
+div.toolbar div.clearfix:after {
+  clear: both;
+  content: ".";
+  display: block;
+  font-size: 0;
+  height: 0;
+  line-height: 0;
+  visibility: hidden;
+}
+
+div.toolbar div.showGoalWrapper {
+  float: left;
+  margin-left: 6px;
+}
+
+div.toolbar div.showObjectiveWrapper {
+  float: right;
+  margin-right: 6px;
+}
+
+div.toolbar div.buttonsWrapper {
+  position: absolute;
+  width: 100%;
+  top: 10px;
+}
+
+div.toolbar div.levelNameWrapper {
+  text-align: center;
+  position: relative;
+  top: 5px;
+  margin: 0 100px;
+  padding-bottom: 10px;
 }
 
 span.levelToolbarSpan {
@@ -365,6 +442,9 @@ div.controls div.box.flex1 div.plus {
 }
 
 /* Command Line */
+div.reactCommandView p.commandLine i {
+  margin: 0 5px;
+}
 
 p.commandLine,
 div.commandLineResult {
@@ -403,6 +483,12 @@ p.commandLine span.icons i:last-child {
 
 p.commandLine span.icons i:first-child {
   margin-left: 5px;
+}
+
+div.reactCommandView p.commandLine span.icons i:first-child {
+  margin-left: 4px;
+  position: relative;
+  left: 1px;
 }
 
 p.commandLine span.icons i {
@@ -535,6 +621,8 @@ li.rebaseEntry,
   border-right: 0;
   box-shadow: -1px -1px 5px rgba(0,0,0,0.3);
   font-weight: bold;
+  max-width: 500px;
+  clear: both;
 }
 
 .helperBar i {
@@ -543,7 +631,13 @@ li.rebaseEntry,
 
 .helperBar a {
   cursor: pointer;
+  color: white;
+  text-decoration: none;
   font-style: italic;
+}
+
+.helperBar a.exit {
+  float: right
 }
 
 .helperBar a:after {
@@ -551,8 +645,17 @@ li.rebaseEntry,
   font-style: normal;
 }
 
+.helperBar a:last-child {
+  padding-right: 10px;
+}
+
+.helperBar a:nth-last-child(2):after,
 .helperBar a:last-child:after {
   content: '';
+}
+
+.helperBar.BaseHelperBar a:nth-last-child(2):after {
+  content: ' \b7';
 }
 
 div.helperBar {
@@ -569,6 +672,11 @@ div.helperBar.show {
   -o-transform: translate3d(0,0,0);
   -ms-transform: translate3d(0,0,0);
   transform: translate3d(0,0,0);
+  height: 70px;
+}
+
+div.helperBar.show.BaseHelperBar {
+  height: auto;
 }
 
 #commandLineBar,
@@ -591,6 +699,12 @@ p.helperText,
 div.terminal-text p.helperText,
 .iRebaseDialog p.helperText {
   font-size: 10px;
+}
+
+.iRebaseDialog p.solutionText {
+  color: lime;
+  font-weight: bold;
+  margin: 0;
 }
 
 .iRebaseDialog p.helperText {
@@ -671,6 +785,10 @@ div.modalView.box.inFront.show {
   z-index: 100;
 }
 
+.terminal-window-holder {
+  z-index: 3;
+}
+
 .terminal-window .inside {
   padding: 10px;
   box-shadow: 0 0 10px rgba(0, 0, 0, 0.7);
@@ -709,6 +827,30 @@ div.modalView.box.inFront.show {
 
 /* Level dropdown view */
 .levelDropdownView {
+}
+
+div.levelDropdownTabWrapper {
+  margin-left: -10px;
+  margin-right: -10px;
+  border-bottom: 2px solid #ccc;
+  margin-bottom: 10px;
+}
+
+div.levelDropdownTab {
+  border: 1px solid #ccc;
+  border-bottom: 0;
+  cursor: pointer;
+  box-shadow: 0px -4px 12px rgba(0,0,0,0.7);
+  border-radius: 4px 4px 0 0;
+  text-align: center;
+  padding: 4px 10px;
+  color: black;
+  background: #ccc;
+  margin: 0 10px;
+}
+
+div.levelDropdownTab.deselected {
+  opacity: 0.3;
 }
 
 div.displayName {
@@ -942,15 +1084,17 @@ div.gitDemonstrationView {
   cursor: pointer;
 }
 
-.leftRightView div.hideLeft i {
-  cursor: default;
-  opacity: 0;
-}
-
 .leftRightView div {
-  margin: 0 20px;
+  margin: 0 60px;
 }
 
+.leftRightView div.exit {
+  -webkit-transform: matrix(-1, 0, 0, 1, 0, 0);
+  -moz-transform: matrix(-1, 0, 0, 1, 0, 0);
+  -ms-transform: matrix(-1, 0, 0, 1, 0, 0);
+}
+
+.leftRightView div.exit,
 .leftRightView div.left {
   color: rgb(253, 50, 50);
   text-shadow: -1px 1px 3px rgba(0,0,0,0.7);
@@ -965,6 +1109,7 @@ div.gitDemonstrationView {
   color: #74FC74;
 }
 
+.leftRightView div.exit:hover,
 .leftRightView div.left:hover {
   color: #FF6969;
 }
@@ -982,10 +1127,12 @@ div.gitDemonstrationView {
 
   -webkit-border-radius: 8px;
   -moz-border-radius: 8px;
+  -ms-border-radius: 8px;
   border-radius: 8px;
 
   -webkit-box-shadow: rgba(0,0,0,1) 0 1px 0;
   -moz-box-shadow: rgba(0,0,0,1) 0 1px 0;
+  -ms-box-shadow: rgba(0,0,0,1) 0 1px 0;
   box-shadow: rgba(0,0,0,1) 0 1px 0;
   text-shadow: rgba(0,0,0,.4) 0 1px 0;
   color: white;
@@ -1115,6 +1262,11 @@ div.gitDemonstrationView {
   #interfaceWrapper {
     width: 100%;
     height: 100%;
+  }
+
+  div.canvasTerminalHolder > div.terminal-window-holder {
+    height: 80%;
+    margin: 7% 0;
   }
 }
 

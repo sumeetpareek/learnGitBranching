@@ -1,18 +1,12 @@
-var _ = require('underscore');
-var constants = require('../util/constants');
-var util = require('../util');
+var LocaleStore = require('../stores/LocaleStore');
 
+var _ = require('underscore');
 var strings = require('../intl/strings').strings;
 
-var getDefaultLocale = exports.getDefaultLocale = function() {
-  return 'en_US';
-};
+var getDefaultLocale = LocaleStore.getDefaultLocale;
 
-var getLocale = exports.getLocale = function() {
-  if (constants.GLOBAL.locale) {
-    return constants.GLOBAL.locale;
-  }
-  return getDefaultLocale();
+var fallbackMap = {
+  'zh_TW': 'zh_CN'
 };
 
 // lets change underscores template settings so it interpolates
@@ -37,10 +31,15 @@ var str = exports.str = function(key, params) {
   // 'You can not delete the branch bugFix because you are currently on that branch!
   //  This is error number 3'
 
-  var locale = getLocale();
+  var locale = LocaleStore.getLocale();
   if (!strings[key]) {
     console.warn('NO INTL support for key ' + key);
     return 'NO INTL support for key ' + key;
+  }
+
+  if (!strings[key][locale]) {
+    // try falling back to another locale if in the map
+    locale = fallbackMap[locale] || getDefaultLocale();
   }
 
   if (!strings[key][locale]) {
@@ -69,23 +68,26 @@ var getIntlKey = exports.getIntlKey = function(obj, key) {
     );
   }
 
-  return obj[key][getLocale()];
+  return obj[key][LocaleStore.getLocale()];
 };
 
-var getDialog = exports.getDialog = function(obj) {
-  var defaultLocale = getDefaultLocale();
-  return getIntlKey(obj, 'dialog') || obj.dialog[defaultLocale];
+exports.todo = function(str) {
+  return str;
 };
 
-var getHint = exports.getHint = function(level) {
+exports.getDialog = function(obj) {
+  return getIntlKey(obj, 'dialog') || obj.dialog[getDefaultLocale()];
+};
+
+exports.getHint = function(level) {
   return getIntlKey(level, 'hint') || str('error-untranslated');
 };
 
-var getName = exports.getName = function(level) {
+exports.getName = function(level) {
   return getIntlKey(level, 'name') || str('error-untranslated');
 };
 
-var getStartDialog = exports.getStartDialog = function(level) {
+exports.getStartDialog = function(level) {
   var startDialog = getIntlKey(level, 'startDialog');
   if (startDialog) { return startDialog; }
 
@@ -104,5 +106,3 @@ var getStartDialog = exports.getStartDialog = function(level) {
 
   return startCopy;
 };
-
-

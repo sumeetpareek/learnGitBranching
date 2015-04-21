@@ -1,14 +1,15 @@
 var _ = require('underscore');
 
 var GitCommands = require('../git/commands');
-var SandboxCommands = require('../level/sandboxCommands');
+var Commands = require('../commands');
+var SandboxCommands = require('../sandbox/commands');
 
 // more or less a static class
 var ParseWaterfall = function(options) {
   options = options || {};
   this.options = options;
   this.shortcutWaterfall = options.shortcutWaterfall || [
-    GitCommands.shortcutMap
+    Commands.commands.getShortcutMap()
   ];
 
   this.instantWaterfall = options.instantWaterfall || [
@@ -22,14 +23,14 @@ var ParseWaterfall = function(options) {
 ParseWaterfall.prototype.initParseWaterfall = function() {
   // check for node when testing
   if (!require('../util').isBrowser()) {
-    this.parseWaterfall = [GitCommands.parse];
+    this.parseWaterfall = [Commands.parse];
     return;
   }
 
   // by deferring the initialization here, we dont require()
   // level too early (which barfs our init)
   this.parseWaterfall = this.options.parseWaterfall || [
-    GitCommands.parse,
+    Commands.parse,
     SandboxCommands.parse,
     SandboxCommands.getOptimisticLevelParse(),
     SandboxCommands.getOptimisticLevelBuilderParse()
@@ -74,11 +75,13 @@ ParseWaterfall.prototype.expandAllShortcuts = function(commandStr) {
 };
 
 ParseWaterfall.prototype.expandShortcut = function(commandStr, shortcutMap) {
-  _.each(shortcutMap, function(regex, method) {
-    var results = regex.exec(commandStr);
-    if (results) {
-      commandStr = method + ' ' + commandStr.slice(results[0].length);
-    }
+  _.each(shortcutMap, function(map, vcs) {
+    _.each(map, function(regex, method) {
+      var results = regex.exec(commandStr);
+      if (results) {
+        commandStr = vcs + ' ' + method + ' ' + commandStr.slice(results[0].length);
+      }
+    });
   });
   return commandStr;
 };

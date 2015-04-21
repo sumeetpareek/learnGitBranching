@@ -1,5 +1,4 @@
 var _ = require('underscore');
-var Backbone = require('backbone');
 var Q = require('q');
 
 var util = require('../util');
@@ -7,23 +6,24 @@ var Main = require('../app');
 var intl = require('../intl');
 var log = require('../log');
 
+var React = require('react');
 var Errors = require('../util/errors');
-var Sandbox = require('../level/sandbox').Sandbox;
-var Constants = require('../util/constants');
-
+var Sandbox = require('../sandbox/').Sandbox;
+var GlobalStateActions = require('../actions/GlobalStateActions');
+var LevelActions = require('../actions/LevelActions');
+var LevelStore = require('../stores/LevelStore');
 var Visualization = require('../visuals/visualization').Visualization;
-var ParseWaterfall = require('../level/parseWaterfall').ParseWaterfall;
 var DisabledMap = require('../level/disabledMap').DisabledMap;
-var Command = require('../models/commandModel').Command;
 var GitShim = require('../git/gitShim').GitShim;
+var Commands = require('../commands');
 
 var MultiView = require('../views/multiView').MultiView;
 var CanvasTerminalHolder = require('../views').CanvasTerminalHolder;
 var ConfirmCancelTerminal = require('../views').ConfirmCancelTerminal;
 var NextLevelConfirm = require('../views').NextLevelConfirm;
-var LevelToolbar = require('../views').LevelToolbar;
+var LevelToolbarView = require('../react_views/LevelToolbarView.jsx');
 
-var TreeCompare = require('../git/treeCompare').TreeCompare;
+var TreeCompare = require('../graph/treeCompare');
 
 var regexMap = {
   'help level': /^help level$/,
@@ -44,18 +44,23 @@ var Level = Sandbox.extend({
     this.level = options.level;
 
     this.gitCommandsIssued = [];
-    this.commandsThatCount = this.getCommandsThatCount();
     this.solved = false;
-
-    this.treeCompare = new TreeCompare();
+    this.wasResetAfterSolved = false;
 
     this.initGoalData(options);
     this.initName(options);
+    this.on('minimizeCanvas', this.minimizeGoal);
+    this.on('resizeCanvas', this.resizeGoal);
+    this.isGoalExpanded = false;
 
     Level.__super__.initialize.apply(this, [options]);
     this.startOffCommand();
 
     this.handleOpen(options.deferred);
+  },
+
+  getIsGoalExpanded: function() {
+    return this.isGoalExpanded;
   },
 
   handleOpen: function(deferred) {
@@ -90,9 +95,9 @@ var Level = Sandbox.extend({
       return;
     }
 
-    var dialog = _.clone(intl.getStartDialog(levelObj));
+    var dialog = $.extend({}, intl.getStartDialog(levelObj));
     // grab the last slide only
-    dialog.childViews = dialog.childViews.splice(-1);
+    dialog.childViews = dialog.childViews.slice(-1);
     new MultiView(_.extend(
       dialog,
       { deferred: deferred }
@@ -125,10 +130,19 @@ var Level = Sandbox.extend({
 
   initName: function() {
     var name = intl.getName(this.level);
-
-    this.levelToolbar = new LevelToolbar({
-      name: name
-    });
+    this.levelToolbar = React.createElement(
+      LevelToolbarView,
+      {
+        name: name,
+        onGoalClick: this.toggleGoal.bind(this),
+        onObjectiveClick: this.toggleObjective.bind(this),
+        parent: this
+      }
+    );
+    React.render(
+      this.levelToolbar,
+      document.getElementById('levelToolbarMount')
+    );
   },
 
   initGoalData: function(options) {
@@ -150,7 +164,8 @@ var Level = Sandbox.extend({
   },
 
   startOffCommand: function() {
-    if (!this.testOption('noStartCommand')) {
+    var method = this.options.command.get('method');
+    if (!this.testOption('noStartCommand') && method !== 'importLevelNow') {
       Main.getEventBaton().trigger(
         'commandSubmitted',
         'hint; delay 2000; show goal'
@@ -166,8 +181,12 @@ var Level = Sandbox.extend({
   },
 
   initGoalVisualization: function() {
+    var onlyMaster = TreeCompare.onlyMasterCompared(this.level);
     // first we make the goal visualization holder
-    this.goalCanvasHolder = new CanvasTerminalHolder();
+    this.goalCanvasHolder = new CanvasTerminalHolder({
+      text: (onlyMaster) ? intl.str('goal-only-master') : undefined,
+      parent: this
+    });
 
     // then we make a visualization. the "el" here is the element to
     // track for size information. the container is where the canvas will be placed
@@ -176,21 +195,61 @@ var Level = Sandbox.extend({
       containerElement: this.goalCanvasHolder.getCanvasLocation(),
       treeString: this.level.goalTreeString,
       noKeyboardInput: true,
+      smallCanvas: true,
+      isGoalVis: true,
+      levelBlob: this.level,
       noClick: true
     });
+
+    // If the goal visualization gets dragged to the right side of the screen, then squeeze the main
+    // repo visualization a bit to make room. This way, you could have the goal window hang out on
+    // the right side of the screen and still see the repo visualization.
+    this.goalVis.customEvents.on('drag', function(event, ui) {
+      if (ui.position.left > 0.5 * $(window).width()) {
+        if (!$('#goalPlaceholder').is(':visible')) {
+          $('#goalPlaceholder').show();
+          this.mainVis.myResize();
+        }
+      } else {
+        if ($('#goalPlaceholder').is(':visible')) {
+          $('#goalPlaceholder').hide();
+          this.mainVis.myResize();
+        }
+      }
+    }.bind(this));
+
     return this.goalCanvasHolder;
+  },
+
+  minimizeGoal: function (position, size) {
+    this.isGoalExpanded = false;
+    this.trigger('goalToggled');
+    this.goalVis.hide();
+    this.goalWindowPos = position;
+    this.goalWindowSize = size;
+    if ($('#goalPlaceholder').is(':visible')) {
+      $('#goalPlaceholder').hide();
+      this.mainVis.myResize();
+    }
+  },
+
+  resizeGoal: function () {
+    if (!this.goalVis) {
+      return;
+    }
+    this.goalVis.myResize();
   },
 
   showSolution: function(command, deferred) {
     var toIssue = this.level.solutionCommand;
-    var issueFunc = _.bind(function() {
+    var issueFunc = function() {
       this.isShowingSolution = true;
       Main.getEventBaton().trigger(
         'commandSubmitted',
         toIssue
       );
       log.showLevelSolution(this.getEnglishName());
-    }, this);
+    }.bind(this);
 
     var commandStr = command.get('rawStr');
     if (!this.testOptionOnString(commandStr, 'noReset')) {
@@ -223,8 +282,30 @@ var Level = Sandbox.extend({
     });
   },
 
+  toggleObjective: function() {
+    Main.getEventBaton().trigger(
+      'commandSubmitted',
+      'objective'
+    );
+  },
+
+  toggleGoal: function () {
+    if (this.goalCanvasHolder && this.goalCanvasHolder.inDom) {
+      this.hideGoal();
+    } else {
+      this.showGoal();
+    }
+  },
+
   showGoal: function(command, defer) {
+    this.isGoalExpanded = true;
+    this.trigger('goalToggled');
     this.showSideVis(command, defer, this.goalCanvasHolder, this.initGoalVisualization);
+    // show the squeezer again we are to the side
+    if ($(this.goalVis.el).offset().left > 0.5 * $(window).width()) {
+      $('#goalPlaceholder').show();
+      this.mainVis.myResize();
+    }
   },
 
   showSideVis: function(command, defer, canvasHolder, initMethod) {
@@ -235,11 +316,13 @@ var Level = Sandbox.extend({
       canvasHolder = initMethod.apply(this);
     }
 
-    canvasHolder.slideIn();
+    canvasHolder.restore(this.goalWindowPos, this.goalWindowSize);
     setTimeout(safeFinish, canvasHolder.getAnimationTime());
   },
 
   hideGoal: function(command, defer) {
+    this.isGoalExpanded = false;
+    this.trigger('goalToggled');
     this.hideSideVis(command, defer, this.goalCanvasHolder);
   },
 
@@ -285,31 +368,10 @@ var Level = Sandbox.extend({
   initGitShim: function(options) {
     // ok we definitely want a shim here
     this.gitShim = new GitShim({
-      beforeCB: _.bind(this.beforeCommandCB, this),
-      afterCB: _.bind(this.afterCommandCB, this),
-      afterDeferHandler: _.bind(this.afterCommandDefer, this)
+      beforeCB: this.beforeCommandCB.bind(this),
+      afterCB: this.afterCommandCB.bind(this),
+      afterDeferHandler: this.afterCommandDefer.bind(this)
     });
-  },
-
-  getCommandsThatCount: function() {
-    var GitCommands = require('../git/commands');
-    var toCount = [
-      'git commit',
-      'git checkout',
-      'git rebase',
-      'git reset',
-      'git branch',
-      'git revert',
-      'git merge',
-      'git cherry-pick'
-    ];
-    var myRegexMap = {};
-    _.each(toCount, function(method) {
-      if (!GitCommands.regexMap[method]) { throw new Error('wut no regex'); }
-
-      myRegexMap[method] = GitCommands.regexMap[method];
-    });
-    return myRegexMap;
   },
 
   undo: function() {
@@ -324,8 +386,10 @@ var Level = Sandbox.extend({
     }
 
     var matched = false;
-    _.each(this.commandsThatCount, function(regex) {
-      matched = matched || regex.test(command.get('rawStr'));
+    _.each(Commands.commands.getCommandsThatCount(), function(map) {
+      _.each(map, function(regex) {
+        matched = matched || regex.test(command.get('rawStr'));
+      });
     });
     if (matched) {
       this.gitCommandsIssued.push(command.get('rawStr'));
@@ -339,28 +403,8 @@ var Level = Sandbox.extend({
       return;
     }
 
-    // TODO refactor this ugly ass switch statement...
-    // BIG TODO REALLY REFACTOR HAX HAX
-    // ok so lets see if they solved it...
-    var current = this.mainVis.gitEngine.exportTree();
-    var solved;
-    if (this.level.compareOnlyMaster) {
-      solved = this.treeCompare.compareBranchWithinTrees(current, this.level.goalTreeString, 'master');
-    } else if (this.level.compareOnlyBranches) {
-      solved = this.treeCompare.compareAllBranchesWithinTrees(current, this.level.goalTreeString);
-    } else if (this.level.compareAllBranchesHashAgnostic) {
-      solved = this.treeCompare.compareAllBranchesWithinTreesHashAgnostic(current, this.level.goalTreeString);
-    } else if (this.level.compareOnlyMasterHashAgnostic) {
-      solved = this.treeCompare.compareBranchesWithinTreesHashAgnostic(current, this.level.goalTreeString, ['master']);
-    } else if (this.level.compareOnlyMasterHashAgnosticWithAsserts) {
-      solved = this.treeCompare.compareBranchesWithinTreesHashAgnostic(current, this.level.goalTreeString, ['master']);
-      solved = solved && this.treeCompare.evalAsserts(
-        current,
-        this.level.goalAsserts
-      );
-    } else {
-      solved = this.treeCompare.compareAllBranchesWithinTreesAndHEAD(current, this.level.goalTreeString);
-    }
+    var current = this.mainVis.gitEngine.printTree();
+    var solved = TreeCompare.dispatchFromLevel(this.level, current);
 
     if (!solved) {
       defer.resolve();
@@ -388,22 +432,41 @@ var Level = Sandbox.extend({
   levelSolved: function(defer) {
     this.solved = true;
     if (!this.isShowingSolution) {
-      Main.getEvents().trigger('levelSolved', this.level.id);
+      LevelActions.setLevelSolved(this.level.id);
       log.levelSolved(this.getEnglishName());
     }
 
     this.hideGoal();
 
-    var nextLevel = Main.getLevelArbiter().getNextLevel(this.level.id);
+    var nextLevel = LevelStore.getNextLevel(this.level.id);
     var numCommands = this.gitCommandsIssued.length;
     var best = this.getNumSolutionCommands();
 
-    Constants.GLOBAL.isAnimating = true;
-    var skipFinishDialog = this.testOption('noFinishDialog');
-    var finishAnimationChain = this.mainVis.gitVisuals.finishAnimation();
+    var skipFinishDialog = this.testOption('noFinishDialog') ||
+      this.wasResetAfterSolved;
+    var skipFinishAnimation = this.wasResetAfterSolved;
+
+    var finishAnimationChain = null;
+    if (skipFinishAnimation) {
+      var deferred = Q.defer();
+      deferred.resolve();
+      finishAnimationChain = deferred.promise;
+      Main.getEventBaton().trigger(
+        'commandSubmitted',
+        'echo "level solved!"'
+      );
+    } else {
+      GlobalStateActions.changeIsAnimating(true);
+      finishAnimationChain = this.mainVis.gitVisuals.finishAnimation();
+      if (this.mainVis.originVis) {
+        finishAnimationChain = finishAnimationChain.then(
+          this.mainVis.originVis.gitVisuals.finishAnimation()
+        );
+      }
+    }
+
     if (!skipFinishDialog) {
-      finishAnimationChain = finishAnimationChain
-      .then(function() {
+      finishAnimationChain = finishAnimationChain.then(function() {
         // we want to ask if they will move onto the next level
         // while giving them their results...
         var nextDialog = new NextLevelConfirm({
@@ -419,6 +482,7 @@ var Level = Sandbox.extend({
     finishAnimationChain
     .then(function() {
       if (!skipFinishDialog && nextLevel) {
+        log.choseNextLevel(nextLevel.id);
         Main.getEventBaton().trigger(
           'commandSubmitted',
           'level ' + nextLevel.id
@@ -429,13 +493,15 @@ var Level = Sandbox.extend({
       // nothing to do, we will just close
     })
     .done(function() {
-      Constants.GLOBAL.isAnimating = false;
+      GlobalStateActions.changeIsAnimating(false);
       defer.resolve();
     });
   },
 
   die: function() {
-    this.levelToolbar.die();
+    React.unmountComponentAtNode(
+      document.getElementById('levelToolbarMount')
+    );
 
     this.hideGoal();
     this.mainVis.die();
@@ -450,13 +516,13 @@ var Level = Sandbox.extend({
   },
 
   getInstantCommands: function() {
-    var getHint = _.bind(function() {
+    var getHint = function() {
       var hint = intl.getHint(this.level);
       if (!hint || !hint.length) {
         return intl.str('no-hint');
       }
       return hint;
-    }, this);
+    }.bind(this);
 
     return [
       [/^help$|^\?$/, function() {
@@ -478,6 +544,9 @@ var Level = Sandbox.extend({
     var commandStr = (command) ? command.get('rawStr') : '';
     if (!this.testOptionOnString(commandStr, 'forSolution')) {
       this.isShowingSolution = false;
+    }
+    if (this.solved) {
+      this.wasResetAfterSolved = true;
     }
     this.solved = false;
     Level.__super__.reset.apply(this, arguments);

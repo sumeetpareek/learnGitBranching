@@ -1,10 +1,11 @@
-var _ = require('underscore');
+var Q = require('q');
 var Backbone = require('backbone');
-var GLOBAL = require('../../util/constants').GLOBAL;
+var GlobalStateActions = require('../../actions/GlobalStateActions');
+var GRAPHICS = require('../../util/constants').GRAPHICS;
 
 var Animation = Backbone.Model.extend({
   defaults: {
-    duration: 300,
+    duration: GRAPHICS.defaultAnimationTime,
     closure: null
   },
 
@@ -28,13 +29,28 @@ var AnimationQueue = Backbone.Model.extend({
     animations: null,
     index: 0,
     callback: null,
-    defer: false
+    defer: false,
+    promiseBased: false
   },
 
   initialize: function(options) {
     this.set('animations', []);
     if (!options.callback) {
       console.warn('no callback');
+    }
+  },
+
+  thenFinish: function(promise, deferred) {
+    promise.then(function() {
+      this.finish();
+    }.bind(this));
+    promise.fail(function(e) {
+      console.log('uncaught error', e);
+      throw e;
+    });
+    this.set('promiseBased', true);
+    if (deferred) {
+      deferred.resolve();
     }
   },
 
@@ -50,13 +66,13 @@ var AnimationQueue = Backbone.Model.extend({
     this.set('index', 0);
 
     // set the global lock that we are animating
-    GLOBAL.isAnimating = true;
+    GlobalStateActions.changeIsAnimating(true);
     this.next();
   },
 
   finish: function() {
     // release lock here
-    GLOBAL.isAnimating = false;
+    GlobalStateActions.changeIsAnimating(false);
     this.get('callback')();
   },
 
@@ -64,6 +80,7 @@ var AnimationQueue = Backbone.Model.extend({
     // ok so call the first animation, and then set a timeout to call the next.
     // since an animation is defined as taking a specific amount of time,
     // we can simply just use timeouts rather than promises / deferreds.
+
     // for graphical displays that require an unknown amount of time, use deferreds
     // but not animation queue (see the finishAnimation for that)
     var animations = this.get('animations');
@@ -79,11 +96,53 @@ var AnimationQueue = Backbone.Model.extend({
     next.run();
 
     this.set('index', index + 1);
-    setTimeout(_.bind(function() {
+    setTimeout(function() {
       this.next();
-    }, this), duration);
+    }.bind(this), duration);
   }
 });
 
+var PromiseAnimation = Backbone.Model.extend({
+  defaults: {
+    deferred: null,
+    closure: null,
+    duration: GRAPHICS.defaultAnimationTime
+  },
+
+  initialize: function(options) {
+    if (!options.closure && !options.animation) {
+      throw new Error('need closure or animation');
+    }
+    this.set('closure', options.closure || options.animation);
+    this.set('duration', options.duration || this.get('duration'));
+    this.set('deferred', options.deferred || Q.defer());
+  },
+
+  getPromise: function() {
+    return this.get('deferred').promise;
+  },
+
+  play: function() {
+    // a single animation is just something with a timeout, but now
+    // we want to resolve a deferred when the animation finishes
+    this.get('closure')();
+    setTimeout(function() {
+      this.get('deferred').resolve();
+    }.bind(this), this.get('duration'));
+  },
+
+  then: function(func) {
+    return this.get('deferred').promise.then(func);
+  }
+});
+
+PromiseAnimation.fromAnimation = function(animation) {
+  return new PromiseAnimation({
+    closure: animation.get('closure'),
+    duration: animation.get('duration')
+  });
+};
+
 exports.Animation = Animation;
+exports.PromiseAnimation = PromiseAnimation;
 exports.AnimationQueue = AnimationQueue;

@@ -9,14 +9,24 @@ exports.level = {
   "name": {
     "ko": "브랜치 스파게티",
     "en_US": "Branch Spaghetti",
+    "fr_FR": "Branche spaghetti",
+    "de_DE": "Branch-Spaghetti",
+    "es_AR": "Enslada de branches",
+    "pt_BR": "Espaguete de ramos",
     "ja": "ブランチスパゲッティ",
-    "zh_CN": "分支浆糊"
+    "zh_CN": "分支浆糊",
+    "zh_TW": "branch 漿糊"
   },
   "hint": {
     "en_US": "Make sure to do everything in the proper order! Branch one first, then two, then three",
+    "fr_FR": "Faites attention à tout faire dans le bon ordre ! La branche one d'abord, puis la seconde, puis la troisième",
+    "de_DE": "Stelle sicher, dass du alles in der richtigen Reihenfolge machst! Branche erst one, dann two, dann three.",
+    "es_AR": "¡Asegurate de hacer las cosas en el orden correcto! Brancheá `one` primero, después `two`, y después `three`.",
+    "pt_BR": "Certifique-se de fazer tudo na ordem correta! Crie o ramo `one` primeiro, depois `two`, depois `three`.",
     "ja": "全て正しい順番で処理すること！oneが最初で、次がtwo、最後にthreeを片付ける。",
     "ko": "이 문제를 해결하는 방법은 여러가지가 있습니다! 체리픽(cherry-pick)이 가장 쉽지만 오래걸리는 방법이고, 리베이스(rebase -i)가 빠른 방법입니다",
-    "zh_CN": "确保你是按照正确的顺序来操作！先操作分支 `one`, 然后 `two`, 最后才是 `three`"
+    "zh_CN": "确保你是按照正确的顺序来操作！先操作分支 `one`, 然后 `two`, 最后才是 `three`",
+    "zh_TW": "確認你是按照正確的順序來操作！先操作 branch  `one`, 然後 `two`, 最後才是 `three`"
   },
   "startDialog": {
     "en_US": {
@@ -34,6 +44,86 @@ exports.level = {
               "Branch `one` needs a re-ordering and a deletion of `C5`. `two` needs pure reordering, and `three` only needs one commit!",
               "",
               "We will let you figure out how to solve this one -- make sure to check out our solution afterwards with `show solution`. "
+            ]
+          }
+        }
+      ]
+    },
+    "fr_FR": {
+      "childViews": [
+        {
+          "type": "ModalAlert",
+          "options": {
+            "markdowns": [
+              "## Branche spaghetti",
+              "",
+              "WOAHHHhhh ! Nous avons pas mal d'objectifs dans ce niveau.",
+              "",
+              "Actuellement nous avons `master` qui se situe quelques commits devant les branches `one` `two` et `three`. Pour une raison quelconque, nous avons besoin de mettre ces trois branches à jour avec les modifications des derniers commits sur master.",
+              "",
+              "La branche `one` a besoin d'une réorganisation et de la suppression de `C5`. `two` doit simplement être reordonnée, et `three` ne nécessite qu'un commit !",
+              "",
+              "Nous vous laissons imaginer la solution pour ce niveau -- comparer avec notre solution après-coup avec la commande `show solution`. "
+            ]
+          }
+        }
+      ]
+    },
+    "es_AR": {
+      "childViews": [
+        {
+          "type": "ModalAlert",
+          "options": {
+            "markdowns": [
+              "## Ensalada de branches",
+              "",
+              "¡WOAHHHhhh Nelly! Tenemos un _pequeño_ objetivo al que llegar en este nivel.",
+              "",
+              "Tenemos un `master` que está algunos commits adelante de `one`, `two` y `three`. Por alguna razón, necesitamos actualizar esas tres ramas con versiones modificadas de los últimos commits de master.",
+              "",
+              "La rama `one` necesita reordenarse, y eliminar `C5`. `two` necesita sólo reordenamiento, y `three` ¡sólo necesita un commit!",
+              "",
+              "Te vamos a dejar darte cuenta cómo resolver este -- asegurate de mirar la solución, después, usando `show solution`. "
+            ]
+          }
+        }
+      ]
+    },
+    "pt_BR": {
+      "childViews": [
+        {
+          "type": "ModalAlert",
+          "options": {
+            "markdowns": [
+              "## Espaguete de ramos",
+              "",
+              "Uhuuuuu Nelly! Temos um belo de um objetivo para alcançar neste nível.",
+              "",
+              "Temos aqui um `master` que está alguns commits atrás dos ramos `one`, `two` e `three`. Seja lá por qual razão, precisamos atualizar esses três outros ramos com versões modificadas dos últimos commits do master.",
+              "",
+              "O ramo `one` precisa de uma reordenação e da exclusão do `C5`. O `two` precisa apenas de reordenação. O `three` precisa de um único commit!",
+              "",
+              "Vamos deixar você descobrir como resolver esta tarefa -- mas não deixe de ver a nossa solução depois com o comando `show solution`. "
+            ]
+          }
+        }
+      ]
+    },
+    "de_DE": {
+      "childViews": [
+        {
+          "type": "ModalAlert",
+          "options": {
+            "markdowns": [
+              "## Branch-Spaghetti",
+              "",
+              "Puh! Wir haben ein ganz schön schweres Ziel für dieses Level.",
+              "",
+              "Wir haben hier einen `master`, der ein paar Commits weiter ist als die Branche `one`, `two` und `three`. Aus welchem Grund auch immer müssen wir diese drei anderen Branches mit modifizierten Versionen der paar letzten Commits von `master` aktualisieren.",
+              "",
+              "Branch `one` benötigt eine Umsortierung und `C5` muss gelöscht werden. `two` muss nur umsortiert werden und `three` braucht nur einen Commit!",
+              "",
+              "Ich lass dich diese Aufgabe selbst lösen -- schau dir hinterher auf jeden Fall die Lösung mit `show solution` an."
             ]
           }
         }
@@ -74,6 +164,26 @@ exports.level = {
               "分支 `one` 需要重新排序和撤销， `two` 需要完全重排，而 `three` 只需要提交一次。",
               "",
               "慢慢摸索会找到答案的 —— 你完事记得用 `show solution` 看看我们的答案哦。"
+            ]
+          }
+        }
+      ]
+    },
+    "zh_TW": {
+      "childViews": [
+        {
+          "type": "ModalAlert",
+          "options": {
+            "markdowns": [
+              "## Branch Spaghetti",
+              "",
+              "哇塞大神！這關我們要來點不同的！",
+              "",
+              "現在我們的 `master` branch 是比 `one` `two` 和 `three` 這三個 branch 多了幾個 commit。由於某種原因，我們需要將 master 所新增的幾個 commit 套用到其它三個 branch 上面。",
+              "",
+              "`one` branch 需要重新排序和取消 `C5` 這一個 commit， `two` 需要完全重排，而 `three` 只需要再一個 commit。",
+              "",
+              "我們會讓你知道如何解決這個問題，之後請記得用 `show solution` 看看我們的答案喔。"
             ]
           }
         }

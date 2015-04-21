@@ -5,17 +5,25 @@ exports.level = {
   "startTree": "{\"branches\":{\"master\":{\"target\":\"C1\",\"id\":\"master\"},\"pushed\":{\"target\":\"C2\",\"id\":\"pushed\"},\"local\":{\"target\":\"C3\",\"id\":\"local\"}},\"commits\":{\"C0\":{\"parents\":[],\"id\":\"C0\",\"rootCommit\":true},\"C1\":{\"parents\":[\"C0\"],\"id\":\"C1\"},\"C2\":{\"parents\":[\"C1\"],\"id\":\"C2\"},\"C3\":{\"parents\":[\"C1\"],\"id\":\"C3\"}},\"HEAD\":{\"target\":\"local\",\"id\":\"HEAD\"}}",
   "name": {
     "en_US": "Reversing Changes in Git",
+    "de_DE": "Änderungen in Git rückgängig machen",
     "ja": "変更を元に戻す",
     "fr_FR": "Annuler des changements avec Git",
+    "es_AR": "Revirtiendo cambios en git",
+    "pt_BR": "Revertendo mudanças no Git",
     "ko": "Git에서 작업 되돌리기",
-    "zh_CN": "在Git中撤销更改"
+    "zh_CN": "在 Git 中撤销更改",
+    "zh_TW": "在 git 中取消修改 "
   },
   "hint": {
     "en_US": "Notice that revert and reset take different arguments.",
-    "fr_FR": "",
-    "zh_CN": "注意revert和reset使用不同的参数。",
+    "de_DE": "Beachte, dass revert und reset unterschiedliche Argumente benötigen",
+    "fr_FR": "Notez que `revert` et `reset` n'ont pas les mêmes arguments.",
+    "es_AR": "Notá que revert y reset toman parámetros distintos",
+    "pt_BR": "Lembre que revert e reset recebem parâmetros diferentes",
+    "zh_CN": "注意 revert 和 reset 使用不同的参数。",
+    "zh_TW": "注意 revert 和 reset 使用不同的參數。",
     "ko": "",
-    "ja": ""
+    "ja"   : "revertとresetとで引数が異なることに注意。"
   },
   "startDialog": {
     "en_US": {
@@ -76,6 +84,195 @@ exports.level = {
               "To complete this level, reverse the two most recent commits on both `local` and `pushed`.",
               "",
               "Keep in mind that `pushed` is a remote branch and `local` is a local branch -- that should help you choose your methods."
+            ]
+          }
+        }
+      ]
+    },
+    "es_AR": {
+      "childViews": [
+        {
+          "type": "ModalAlert",
+          "options": {
+            "markdowns": [
+              "## Revirtiendo cambios en git",
+              "",
+              "Hay varias maneras de revertir cambios en git. Y, tal como al commitear, revertir cambios en git tiene tanto un componente de bajo nivel (indexar archivos o fragmentos individualmente) como un componente de alto nivel (cómo son efectivamente revertidos los cambios). Nuestra aplicación se va a concentrar en esto último.",
+              "",
+              "Hay dos formas principales de deshacer cambios en git -- uno es usando `git reset` y el otro es usando `git revert`. Vamos a ver cada uno de esos a continuación",
+              ""
+            ]
+          }
+        },
+        {
+          "type": "GitDemonstrationView",
+          "options": {
+            "beforeMarkdowns": [
+              "## Git Reset",
+              "",
+              "`git reset` revierte los cambios moviendo la referencia de una rama hacia atrás en el tiempo a un commit anterior. En este sentido podés pensarlo como \"reescribir la historia\". `git reset` va a mover la rama hacia atrás, como si el commit nunca se hubiera hecho.",
+              "",
+              "Veamos cómo es eso:"
+            ],
+            "afterMarkdowns": [
+              "¡Genial! git simplemente movió la referencia de la rama master atrás hacia `C1`. Ahora tu repositorio local está en un estado como si `C2` nunca hubiera ocurrido"
+            ],
+            "command": "git reset HEAD~1",
+            "beforeCommand": "git commit"
+          }
+        },
+        {
+          "type": "GitDemonstrationView",
+          "options": {
+            "beforeMarkdowns": [
+              "## Git Revert",
+              "",
+              "Mientras que resetear los cambios funciona genial para ramas locales en tu máquina, su método de \"reescribir la historia\" no funciona para ramas remotas que otros están usando.",
+              "",
+              "Para revertir cambios y *compartir* esa _revertida_ con otros, necesitamos usar `git revert`. Veámoslo en acción"
+            ],
+            "afterMarkdowns": [
+              "Extraño. Hay un nuevo commit aplicado sobre el que queríamos revertir. Eso es porque este nuevo commit `C2'` introduce *cambios* - sólo que esos cambios son exactamente los necesarios para revertir los que introdujo `C2`.",
+              "",
+              "Cuando usás revert, podés pushear ese cambio para compartirlo con otros."
+            ],
+            "command": "git revert HEAD",
+            "beforeCommand": "git commit"
+          }
+        },
+        {
+          "type": "ModalAlert",
+          "options": {
+            "markdowns": [
+              "Para completar este nivel, revertí los dos commits más recientes, tanto en `local` como en `pushed`.",
+              "",
+              "Tené en cuenta que `pushed` es una rama remota y `local` es una rama local -- eso debería ayudarte a elegir qué métodos usar."
+            ]
+          }
+        }
+      ]
+    },
+    "pt_BR": {
+      "childViews": [
+        {
+          "type": "ModalAlert",
+          "options": {
+            "markdowns": [
+              "## Revertendo Mudanças no Git",
+              "",
+              "Existem várias maneiras de reverter mudanças no Git. E assim como o ato de commitar, reverter mudanças no Git também tem um componente de baixo nível (a preparação, ou staging, de arquivos ou trechos de arquivos individuais) e um componente de alto nível (como as mudanças são, de fato, revertidas). Aqui vamos focar neste último ponto.",
+              "",
+              "Há duas maneiras principais de desfazer mudanças no Git -- uma delas é usando `git reset`, e a outra é usando `git revert`. Vamos olhar cada uma delas na próxima janela",
+              ""
+            ]
+          }
+        },
+        {
+          "type": "GitDemonstrationView",
+          "options": {
+            "beforeMarkdowns": [
+              "## Git Reset",
+              "",
+              "O comando `git reset` reverte mudanças movendo para trás no tempo (para um commit mais antigo) a referência do ramo. Desta forma, você pode pensar nessa operação como uma \"reescrita do histórico\"; o `git reset` vai mover o ramo para trás como se o commit nunca tivesse existido.",
+              "",
+              "Vejamos como funciona:"
+            ],
+            "afterMarkdowns": [
+              "Legal! O Git simplesmente moveu a referência do ramo master de volta para `C1`; agora o nosso repositório local está em um estado como se o `C2` nunca tivesse acontecido"
+            ],
+            "command": "git reset HEAD~1",
+            "beforeCommand": "git commit"
+          }
+        },
+        {
+          "type": "GitDemonstrationView",
+          "options": {
+            "beforeMarkdowns": [
+              "## Git Revert",
+              "",
+              "Embora o reset funcione muito bem em ramos locais no seu próprio computador, o método utilizado de \"reescrever o histórico\" não funciona com ramos remotos que outras pessoas estejam usando.",
+              "",
+              "Para reverter mudanças e conseguir *compartilhar* essas mudanças com os outros, precisamos usar o `git revert`. Vejamo-lo em ação"
+            ],
+            "afterMarkdowns": [
+              "Estranho, um novo commit surgiu abaixo do commit que queríamos reverter. Isso é porque o novo commit `C2'` introduz *mudanças* -- acontece que as mudanças que ele introduz revertem exatamente aquelas do commit `C2`.",
+              "",
+              "Com o `revert`, você pode fazer `push` das suas mudanças para compartilhá-las com os outros."
+            ],
+            "command": "git revert HEAD",
+            "beforeCommand": "git commit"
+          }
+        },
+        {
+          "type": "ModalAlert",
+          "options": {
+            "markdowns": [
+              "Para completar este nível, reverta os dois commits mais recentes tanto em `local` como em `pushed`.",
+              "",
+              "Tenha em mente que `pushed` é um ramo remoto, e `local` é um ramo local -- isso deve ajudá-lo a escolher o método apropriado."
+            ]
+          }
+        }
+      ]
+    },
+    "de_DE": {
+      "childViews": [
+        {
+          "type": "ModalAlert",
+          "options": {
+            "markdowns": [
+              "## Änderungen in Git rückgängig machen",
+              "",
+              "Es gibt viele Möglichkeiten, Änderungen in Git zurückzunehmen. Und ebenso wie das Committen hat auch das rückgängig Machen eine Basis-Komponente (Dateien und Inhalte vormerken) und einen übergeordneten Aspekt (wie die Änderungen tatsächlich zurückgenommen werden). Diese Applikation beschäftigt sich wiederum mit den übergeordneten Vorgängen.",
+              "",
+              "Es gibt grundsätzlich zwei Arten in Git etwas rückgängig zu machen -- einerseits `git reset` und andererseit `git revert`. Wir schauen uns beide mal an.",
+              ""
+            ]
+          }
+        },
+        {
+          "type": "GitDemonstrationView",
+          "options": {
+            "beforeMarkdowns": [
+              "## Git Reset",
+              "",
+              "`git reset` nimm Änderungen zurück, indem es eine Branch-Referenz auf einen anderen Commit setzt. Es ist ein bisschen (aber nicht wirklich) wie \"Geschichte umschreiben\"; `git reset` bewegt einen Branch auf einen anderen Commit, als hätte er nie anders ausgesehen.",
+              "",
+              "Schauen wir, wie das aussieht:"
+            ],
+            "afterMarkdowns": [
+              "Schick! Git hat den `master` einfach auf `C1` gesetzt; unser lokales Repository sieht nun so aus, als hätte `C2` nie stattgefunden."
+            ],
+            "command": "git reset HEAD~1",
+            "beforeCommand": "git commit"
+          }
+        },
+        {
+          "type": "GitDemonstrationView",
+          "options": {
+            "beforeMarkdowns": [
+              "## Git Revert",
+              "",
+              "Obwohl `git reset` super im lokalen Kontext funktioniert, ist der Ansatz vom \"Umschreiben\" der Commit-Geschichte nicht geeignet für Branches, die auf einem Server liegen und auch von anderen benutzt werden.",
+              "",
+              "Um Änderungen rückgängig zu machen und das mit anderen zu *teilen* müssen wir `git revert` benutzen. Schauen wir uns das in Aktion an."
+            ],
+            "afterMarkdowns": [
+              "Komisch, es ist ein neuer Commit entstanden. Das liegt daran, dass `C2'` genau die *Änderungen* enthält, die die Änderungen aus `C2` aufheben.",
+              "",
+              "Durch Reverten kannst du das Zurücknehmen von Änderungen mit anderen teilen."
+            ],
+            "command": "git revert HEAD",
+            "beforeCommand": "git commit"
+          }
+        },
+        {
+          "type": "ModalAlert",
+          "options": {
+            "markdowns": [
+              "Um diesen Level abzuschließen musst du sowohl auf `local` also auch auf `pushed` jeweils die zwei letzten Commits zurücknehmen.",
+              "",
+              "Vergiss nicht, dass `pushed` auch auf einem Server liegt und `local` ein rein lokaler Branch ist -- das sollte dir helfen, die richtige Methode zu wählen."
             ]
           }
         }
@@ -152,9 +349,9 @@ exports.level = {
             "markdowns": [
               "## Annuler des changements avec Git",
               "",
-              "Il y a de nombreuses façons d'annuler des changement avec Git. De même que pour les commits, annuler des changements avec Git a à la fois un aspect bas-niveau (gestion dans le 'staging' des fichiers et morceaux de fichiers) et un aspect de plus haut niveau 9comment les changements sont effectivement annulés). Nous allons nous intéresser à ce dernier point.",
+              "Il y a de nombreuses façons d'annuler des changement avec Git. De même que pour les commits, annuler des changements avec Git a à la fois un aspect bas-niveau (gestion des fichiers et morceaux de fichiers) et un aspect de plus haut niveau (comment les changements sont effectivement annulés). Nous allons nous intéresser à ce dernier point.",
               "",
-              "Il y a principalement deux façons d'annuler des changements avec Git -- l'une est `git reset` et l'autre est `git revert`. Nous allons maintenant voir chacune de ces façons",
+              "Il y a principalement deux façons d'annuler des changements avec Git -- l'une est `git reset` et l'autre est `git revert`. Nous allons maintenant voir chacune de ces façons.",
               ""
             ]
           }
@@ -187,7 +384,7 @@ exports.level = {
               "Pour pouvoir annuler des changements et *partager* ces annulations avec d'autres, nous devons utiliser `git revert`. Regardons comment cela fonctionne"
             ],
             "afterMarkdowns": [
-              "Étrangement, un nouveau commit est appaaru en bas sous le commit que nous voulions annuler. C'est parce que ce nouveau commit `C2'` introduit des *modifications* -- celles qui correspondent justement à l'annulation de celles du commit `C2`.",
+              "Étrangement, un nouveau commit est apparu en bas sous le commit que nous voulions annuler. C'est parce que ce nouveau commit `C2'` introduit des *modifications* -- celles qui correspondent justement à l'annulation de celles du commit `C2`.",
               "",
               "Avec revert, vous pouvez diffuser (push) vos modifications et les partager avec tout le monde."
             ],
@@ -234,7 +431,7 @@ exports.level = {
             ],
             "command": "git reset HEAD~1",
             "afterMarkdowns": [
-              "Nice!Git把master分支的指向简单地移回到`C1`；现在我们的本地代码库处于没有提交过`C2`的状态了。"
+              "漂亮! Git把 master 分支的指向简单地移回到`C1`；现在我们的本地代码库处于没有提交过`C2`的状态了。"
             ],
             "beforeCommand": "git commit"
           }
@@ -265,6 +462,69 @@ exports.level = {
               "要完成此关，分别撤销`local`分支和`pushed`分支上的最近一次提交。",
               "",
               "记住 `pushed` 是一个远程分支，`local` 是一个本地分支 —— 有了这么明显的提示应该知道用哪种方法了吧？"
+            ]
+          }
+        }
+      ]
+    },
+    "zh_TW": {
+      "childViews": [
+        {
+          "type": "ModalAlert",
+          "options": {
+            "markdowns": [
+              "## 取消 git 的修改",
+              "",
+              "在 git 裡面取消修改的方法很多。和 commit 一樣，在 git 裡面取消修改同時具有底層的部份（暫存一些獨立的文件或者片段）和高層的部份（修改是如何被取消）。我們主要講的重點是後者。",
+              "",
+              "在 git 裡主要用兩種方法來取消修改，一種是 `git reset`，另外一種是 `git revert`。讓我們在下一個對話視窗中逐一瞭解它們。",
+              ""
+            ]
+          }
+        },
+        {
+          "type": "GitDemonstrationView",
+          "options": {
+            "beforeMarkdowns": [
+              "## Git Reset",
+              "",
+              "`git reset` 把分支的參考點退回到上一個 commit 來取消修改。你可以認為這是在\"重寫歷史\"。`git reset` 往回移動 branch，原來的 branch 所指向的 commit 好像從來沒有存在過一樣。",
+              "",
+              "讓我們來看看要怎麼操作："
+            ],
+            "command": "git reset HEAD~1",
+            "afterMarkdowns": [
+              "太好了! Git 把 master branch 簡單地移回到 `C1`；現在在我們的 local 已經退回到沒有 commit 過 `C2` 的狀態了。"
+            ],
+            "beforeCommand": "git commit"
+          }
+        },
+        {
+          "type": "GitDemonstrationView",
+          "options": {
+            "beforeMarkdowns": [
+              "## Git Revert",
+              "",
+              "雖然在你的 local branch 中使用 `git reset` 很方便，但是這種「改寫歷史」的方法對別人的 remote branch 是無效的哦！",
+              "",
+              "為了取消修改並且把這個狀態*分享*給別人，我們需要使用 `git revert`。舉個例子"
+            ],
+            "command": "git revert HEAD",
+            "afterMarkdowns": [
+              "很奇怪吧！在我們要取消的 commit 後面居然多了一個新的 commit！這是因為新的 commit `C2'` 引入了*修改*——用來表示我們取消 `C2` 這個 commit 的修改。",
+              "",
+              "多虧了 revert，現在可以把你的修改分享給別人啦。"
+            ],
+            "beforeCommand": "git commit"
+          }
+        },
+        {
+          "type": "ModalAlert",
+          "options": {
+            "markdowns": [
+              "要完成這一關，分別取消 `local` branch 和 `pushed` branch 上的最近的一次 commit。",
+              "",
+              "記住 `pushed` 是一個 remote branch，`local` 是一個 local branch，有了這麼明顯的提示應該知道要用哪種方法了吧？"
             ]
           }
         }

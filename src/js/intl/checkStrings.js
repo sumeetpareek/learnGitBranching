@@ -1,5 +1,5 @@
 var sys = require('sys');
-var _ = require('underscore');
+var util = require('../util');
 var child_process = require('child_process');
 var strings = require('../intl/strings').strings;
 
@@ -17,15 +17,18 @@ var findKey = function(badKey) {
   });
 };
 
+var goodKeys = 0;
 var validateKey = function(key) {
   if (!strings[key]) {
     console.log('NO KEY for: "', key, '"');
     findKey(key);
+  } else {
+    goodKeys++;
   }
 };
 
 var processLines = function(lines) {
-  _.each(lines, function(line) {
+  lines.forEach(function(line) {
     var results = easyRegex.exec(line);
     if (results && results[1]) {
       validateKey(results[1]);
@@ -39,9 +42,13 @@ var processLines = function(lines) {
   });
 };
 
-child_process.exec(
-  searchCommand,
-  function(err, output) {
-    processLines(output.split('\n'));
-});
+if (!util.isBrowser()) {
+  child_process.exec(
+    searchCommand,
+    function(err, output) {
+      processLines(output.split('\n'));
+      console.log(goodKeys + ' good keys found!');
+    }
+  );
+}
 

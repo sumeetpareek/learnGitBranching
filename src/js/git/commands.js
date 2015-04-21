@@ -1,24 +1,790 @@
 var _ = require('underscore');
 var intl = require('../intl');
 
+var Graph = require('../graph');
 var Errors = require('../util/errors');
 var CommandProcessError = Errors.CommandProcessError;
 var GitError = Errors.GitError;
 var Warning = Errors.Warning;
 var CommandResult = Errors.CommandResult;
 
-var shortcutMap = {
-  'git commit': /^(gc|git ci)($|\s)/,
-  'git add': /^ga($|\s)/,
-  'git checkout': /^(go|git co)($|\s)/,
-  'git rebase': /^gr($|\s)/,
-  'git branch': /^(gb|git br)($|\s)/,
-  'git status': /^(gst|gs|git st)($|\s)/,
-  'git help': /^git$/
+var ORIGIN_PREFIX = 'o/';
+
+var crappyUnescape = function(str) {
+  return str.replace(/&#x27;/g, "'").replace(/&#x2F;/g, "/");
+};
+
+function isColonRefspec(str) {
+  return str.indexOf(':') !== -1 && str.split(':').length === 2;
+}
+
+var assertIsRef = function(engine, ref) {
+  engine.resolveID(ref); // will throw giterror if cant resolve
+};
+
+var validateBranchName = function(engine, name) {
+  return engine.validateBranchName(name);
+};
+
+var validateBranchNameIfNeeded = function(engine, name) {
+  if (engine.refs[name]) {
+    return name;
+  }
+  return validateBranchName(engine, name);
+};
+
+var assertNotCheckedOut = function(engine, ref) {
+  if (!engine.refs[ref]) {
+    return;
+  }
+  if (engine.HEAD.get('target') === engine.refs[ref]) {
+    throw new GitError({
+      msg: intl.todo(
+        'cannot fetch to ' + ref + ' when checked out on ' + ref
+      )
+    });
+  }
+};
+
+var assertIsBranch = function(engine, ref) {
+  assertIsRef(engine, ref);
+  var obj = engine.resolveID(ref);
+  if (!obj || obj.get('type') !== 'branch') {
+    throw new GitError({
+      msg: intl.todo(
+        ref + ' is not a branch'
+      )
+    });
+  }
+};
+
+var assertIsRemoteBranch = function(engine, ref) {
+  assertIsRef(engine, ref);
+  var obj = engine.resolveID(ref);
+
+  if (obj.get('type') !== 'branch' ||
+      !obj.getIsRemote()) {
+    throw new GitError({
+      msg: intl.todo(
+        ref + ' is not a remote branch'
+      )
+    });
+  }
+};
+
+var assertOriginSpecified = function(generalArgs) {
+  if (!generalArgs.length) {
+    return;
+  }
+  if (generalArgs[0] !== 'origin') {
+    throw new GitError({
+      msg: intl.todo(
+        generalArgs[0] + ' is not a remote in your repository! try adding origin that argument'
+      )
+    });
+  }
+};
+
+var assertBranchIsRemoteTracking = function(engine, branchName) {
+  branchName = crappyUnescape(branchName);
+  if (!engine.resolveID(branchName)) {
+    throw new GitError({
+      msg: intl.todo(branchName + ' is not a branch!')
+    });
+  }
+  var branch = engine.resolveID(branchName);
+  if (branch.get('type') !== 'branch') {
+    throw new GitError({
+      msg: intl.todo(branchName + ' is not a branch!')
+    });
+  }
+
+  var tracking = branch.getRemoteTrackingBranchID();
+  if (!tracking) {
+    throw new GitError({
+      msg: intl.todo(
+        branchName + ' is not a remote tracking branch! I dont know where to push'
+      )
+    });
+  }
+  return tracking;
+};
+
+var commandConfig = {
+  commit: {
+    sc: /^(gc|git ci)($|\s)/,
+    regex: /^git +commit($|\s)/,
+    options: [
+      '--amend',
+      '-a',
+      '-am',
+      '-m'
+    ],
+    execute: function(engine, command) {
+      var commandOptions = command.getOptionsMap();
+      command.acceptNoGeneralArgs();
+
+      if (commandOptions['-am'] && (
+          commandOptions['-a'] || commandOptions['-m'])) {
+        throw new GitError({
+          msg: intl.str('git-error-options')
+        });
+      }
+
+      var msg = null;
+      var args = null;
+      if (commandOptions['-a']) {
+        command.addWarning(intl.str('git-warning-add'));
+      }
+
+      if (commandOptions['-am']) {
+        args = commandOptions['-am'];
+        command.validateArgBounds(args, 1, 1, '-am');
+        msg = args[0];
+      }
+
+      if (commandOptions['-m']) {
+        args = commandOptions['-m'];
+        command.validateArgBounds(args, 1, 1, '-m');
+        msg = args[0];
+      }
+
+      var newCommit = engine.commit({
+        isAmend: commandOptions['--amend']
+      });
+      if (msg) {
+        msg = msg
+          .replace(/&quot;/g, '"')
+          .replace(/^"/g, '')
+          .replace(/"$/g, '');
+
+        newCommit.set('commitMessage', msg);
+      }
+
+      var promise = engine.animationFactory.playCommitBirthPromiseAnimation(
+        newCommit,
+        engine.gitVisuals
+      );
+      engine.animationQueue.thenFinish(promise);
+    }
+  },
+
+  cherrypick: {
+    displayName: 'cherry-pick',
+    regex: /^git +cherry-pick($|\s)/,
+    execute: function(engine, command) {
+      var commandOptions = command.getOptionsMap();
+      var generalArgs = command.getGeneralArgs();
+
+      command.validateArgBounds(generalArgs, 1, Number.MAX_VALUE);
+
+      var set = Graph.getUpstreamSet(engine, 'HEAD');
+      // first resolve all the refs (as an error check)
+      var toCherrypick = _.map(generalArgs, function(arg) {
+        var commit = engine.getCommitFromRef(arg);
+        // and check that its not upstream
+        if (set[commit.get('id')]) {
+          throw new GitError({
+            msg: intl.str(
+              'git-error-already-exists',
+              { commit: commit.get('id') }
+            )
+          });
+        }
+        return commit;
+      }, this);
+
+      engine.setupCherrypickChain(toCherrypick);
+    }
+  },
+
+  pull: {
+    regex: /^git +pull($|\s)/,
+    options: [
+      '--rebase'
+    ],
+    execute: function(engine, command) {
+      if (!engine.hasOrigin()) {
+        throw new GitError({
+          msg: intl.str('git-error-origin-required')
+        });
+      }
+
+      var commandOptions = command.getOptionsMap();
+      var generalArgs = command.getGeneralArgs();
+      command.twoArgsForOrigin(generalArgs);
+      assertOriginSpecified(generalArgs);
+      // here is the deal -- git pull is pretty complex with
+      // the arguments it wants. You can
+      //   A) specify the remote branch you want to
+      //      merge & fetch, in which case it completely
+      //      ignores the properties of branch you are on, or
+      //
+      //  B) specify no args, in which case it figures out
+      //     the branch to fetch from the remote tracking
+      //     and merges those in, or
+      //
+      //  C) specify the colon refspec like fetch, where it does
+      //     the fetch and then just merges the dest
+
+      var source;
+      var destination;
+      var firstArg = generalArgs[1];
+      // COPY PASTA validation code from fetch. maybe fix this?
+      if (firstArg && isColonRefspec(firstArg)) {
+        var refspecParts = firstArg.split(':');
+        source = refspecParts[0];
+        destination = validateBranchNameIfNeeded(
+          engine,
+          crappyUnescape(refspecParts[1])
+        );
+        assertNotCheckedOut(engine, destination);
+      } else if (firstArg) {
+        source = firstArg;
+        assertIsBranch(engine.origin, source);
+        // get o/master locally if master is specified
+        destination = engine.origin.refs[source].getPrefixedID();
+      } else {
+        // cant be detached
+        if (engine.getDetachedHead()) {
+          throw new GitError({
+            msg: intl.todo('Git pull can not be executed in detached HEAD mode if no remote branch specified!')
+          });
+        }
+        // ok we need to get our currently checked out branch
+        // and then specify source and dest
+        var branch = engine.getOneBeforeCommit('HEAD');
+        var branchName = branch.get('id');
+        assertBranchIsRemoteTracking(engine, branchName);
+        destination = branch.getRemoteTrackingBranchID();
+        source = destination.replace(ORIGIN_PREFIX, '');
+      }
+
+      engine.pull({
+        source: source,
+        destination: destination,
+        isRebase: commandOptions['--rebase']
+      });
+    }
+  },
+
+  fakeTeamwork: {
+    regex: /^git +fakeTeamwork($|\s)/,
+    execute: function(engine, command) {
+      var generalArgs = command.getGeneralArgs();
+      if (!engine.hasOrigin()) {
+        throw new GitError({
+          msg: intl.str('git-error-origin-required')
+        });
+      }
+
+      command.validateArgBounds(generalArgs, 0, 2);
+      // allow formats of: git Faketeamwork 2 or git Faketeamwork side 3
+      var branch = (engine.origin.refs[generalArgs[0]]) ?
+        generalArgs[0] : 'master';
+      var numToMake = parseInt(generalArgs[0], 10) || generalArgs[1] || 1;
+
+      // make sure its a branch and exists
+      var destBranch = engine.origin.resolveID(branch);
+      if (destBranch.get('type') !== 'branch') {
+        throw new GitError({
+          msg: intl.str('git-error-options')
+        });
+      }
+        
+      engine.fakeTeamwork(numToMake, branch);
+    }
+  },
+
+  clone: {
+    regex: /^git +clone *?$/,
+    execute: function(engine, command) {
+      command.acceptNoGeneralArgs();
+      engine.makeOrigin(engine.printTree());
+    }
+  },
+
+  remote: {
+    regex: /^git +remote($|\s)/,
+    options: [
+      '-v'
+    ],
+    execute: function(engine, command) {
+      command.acceptNoGeneralArgs();
+      if (!engine.hasOrigin()) {
+        throw new CommandResult({
+          msg: ''
+        });
+      }
+
+      engine.printRemotes({
+        verbose: !!command.getOptionsMap()['-v']
+      });
+    }
+  },
+
+  fetch: {
+    regex: /^git +fetch($|\s)/,
+    execute: function(engine, command) {
+      if (!engine.hasOrigin()) {
+        throw new GitError({
+          msg: intl.str('git-error-origin-required')
+        });
+      }
+
+      var source;
+      var destination;
+      var generalArgs = command.getGeneralArgs();
+      command.twoArgsForOrigin(generalArgs);
+      assertOriginSpecified(generalArgs);
+
+      var firstArg = generalArgs[1];
+      if (firstArg && isColonRefspec(firstArg)) {
+        var refspecParts = firstArg.split(':');
+        source = refspecParts[0];
+        destination = validateBranchNameIfNeeded(
+          engine,
+          crappyUnescape(refspecParts[1])
+        );
+        assertNotCheckedOut(engine, destination);
+      } else if (firstArg) {
+        // here is the deal -- its JUST like git push. the first arg
+        // is used as both the destination and the source, so we need
+        // to make sure it exists as the source on REMOTE. however
+        // technically we have a destination here as the remote branch
+        source = firstArg;
+        assertIsBranch(engine.origin, source);
+        // get o/master locally if master is specified
+        destination = engine.origin.refs[source].getPrefixedID();
+      }
+      if (source) { // empty string fails this check
+        assertIsRef(engine.origin, source);
+      }
+
+      engine.fetch({
+        source: source,
+        destination: destination
+      });
+    }
+  },
+
+  branch: {
+    sc: /^(gb|git br)($|\s)/,
+    regex: /^git +branch($|\s)/,
+    options: [
+      '-d',
+      '-D',
+      '-f',
+      '-a',
+      '-r',
+      '-u',
+      '--contains'
+    ],
+    execute: function(engine, command) {
+      var commandOptions = command.getOptionsMap();
+      var generalArgs = command.getGeneralArgs();
+
+      var args = null;
+      // handle deletion first
+      if (commandOptions['-d'] || commandOptions['-D']) {
+        var names = commandOptions['-d'] || commandOptions['-D'];
+        names = names.concat(generalArgs);
+        command.validateArgBounds(names, 1, Number.MAX_VALUE, '-d');
+
+        _.each(names, function(name) {
+          engine.validateAndDeleteBranch(name);
+        });
+        return;
+      }
+
+      if (commandOptions['-u']) {
+        args = commandOptions['-u'].concat(generalArgs);
+        command.validateArgBounds(args, 1, 2, '-u');
+        var remoteBranch = crappyUnescape(args[0]);
+        var branch = args[1] || engine.getOneBeforeCommit('HEAD').get('id');
+
+        // some assertions, both of these have to exist first
+        assertIsRemoteBranch(engine, remoteBranch);
+        assertIsBranch(engine, branch);
+        engine.setLocalToTrackRemote(
+          engine.refs[branch],
+          engine.refs[remoteBranch]
+        );
+        return;
+      }
+
+      if (commandOptions['--contains']) {
+        args = commandOptions['--contains'];
+        command.validateArgBounds(args, 1, 1, '--contains');
+        engine.printBranchesWithout(args[0]);
+        return;
+      }
+
+      if (commandOptions['-f']) {
+        args = commandOptions['-f'].concat(generalArgs);
+        command.twoArgsImpliedHead(args, '-f');
+
+        // we want to force a branch somewhere
+        engine.forceBranch(args[0], args[1]);
+        return;
+      }
+
+
+      if (generalArgs.length === 0) {
+        var branches;
+        if (commandOptions['-a']) {
+          branches = engine.getBranches();
+        } else if (commandOptions['-r']) {
+          branches = engine.getRemoteBranches();
+        } else {
+          branches = engine.getLocalBranches();
+        }
+        engine.printBranches(branches);
+        return;
+      }
+
+      command.twoArgsImpliedHead(generalArgs);
+      engine.branch(generalArgs[0], generalArgs[1]);
+    }
+  },
+
+  add: {
+    dontCountForGolf: true,
+    sc: /^ga($|\s)/,
+    regex: /^git +add($|\s)/,
+    execute: function() {
+      throw new CommandResult({
+        msg: intl.str('git-error-staging')
+      });
+    }
+  },
+
+  reset: {
+    regex: /^git +reset($|\s)/,
+    options: [
+      '--hard',
+      '--soft'
+    ],
+    execute: function(engine, command) {
+      var commandOptions = command.getOptionsMap();
+      var generalArgs = command.getGeneralArgs();
+
+      if (commandOptions['--soft']) {
+        throw new GitError({
+          msg: intl.str('git-error-staging')
+        });
+      }
+      if (commandOptions['--hard']) {
+        command.addWarning(
+          intl.str('git-warning-hard')
+        );
+        // dont absorb the arg off of --hard
+        generalArgs = generalArgs.concat(commandOptions['--hard']);
+      }
+
+      command.validateArgBounds(generalArgs, 1, 1);
+
+      if (engine.getDetachedHead()) {
+        throw new GitError({
+          msg: intl.str('git-error-reset-detached')
+        });
+      }
+
+      engine.reset(generalArgs[0]);
+    }
+  },
+
+  revert: {
+    regex: /^git +revert($|\s)/,
+    execute: function(engine, command) {
+      var generalArgs = command.getGeneralArgs();
+
+      command.validateArgBounds(generalArgs, 1, Number.MAX_VALUE);
+      engine.revert(generalArgs);
+    }
+  },
+
+  merge: {
+    regex: /^git +merge($|\s)/,
+    options: [
+      '--no-ff'
+    ],
+    execute: function(engine, command) {
+      var commandOptions = command.getOptionsMap();
+      var generalArgs = command.getGeneralArgs();
+      command.validateArgBounds(generalArgs, 1, 1);
+
+      var newCommit = engine.merge(
+        generalArgs[0],
+        { noFF: !!commandOptions['--no-ff'] }
+      );
+
+      if (newCommit === undefined) {
+        // its just a fast forwrard
+        engine.animationFactory.refreshTree(
+          engine.animationQueue, engine.gitVisuals
+        );
+        return;
+      }
+
+      engine.animationFactory.genCommitBirthAnimation(
+        engine.animationQueue, newCommit, engine.gitVisuals
+      );
+    }
+  },
+
+  log: {
+    dontCountForGolf: true,
+    regex: /^git +log($|\s)/,
+    execute: function(engine, command) {
+      var generalArgs = command.getGeneralArgs();
+
+      if (generalArgs.length == 2) {
+        // do fancy git log branchA ^branchB
+        if (generalArgs[1][0] == '^') {
+          engine.logWithout(generalArgs[0], generalArgs[1]);
+        } else {
+          throw new GitError({
+            msg: intl.str('git-error-options')
+          });
+        }
+      }
+
+      command.oneArgImpliedHead(generalArgs);
+      engine.log(generalArgs[0]);
+    }
+  },
+
+  show: {
+    dontCountForGolf: true,
+    regex: /^git +show($|\s)/,
+    execute: function(engine, command) {
+      var generalArgs = command.getGeneralArgs();
+      command.oneArgImpliedHead(generalArgs);
+      engine.show(generalArgs[0]);
+    }
+  },
+
+  rebase: {
+    sc: /^gr($|\s)/,
+    options: [
+      '-i',
+      '--solution-ordering',
+      '--interactive-test',
+      '--aboveAll',
+      '-p',
+      '--preserve-merges'
+    ],
+    regex: /^git +rebase($|\s)/,
+    execute: function(engine, command) {
+      var commandOptions = command.getOptionsMap();
+      var generalArgs = command.getGeneralArgs();
+
+      if (commandOptions['-i']) {
+        var args = commandOptions['-i'].concat(generalArgs);
+        command.twoArgsImpliedHead(args, ' -i');
+        
+        if (commandOptions['--interactive-test']) {
+          engine.rebaseInteractiveTest(
+            args[0],
+            args[1], {
+              interactiveTest: commandOptions['--interactive-test']
+            }
+          );
+        } else {
+          engine.rebaseInteractive(
+            args[0],
+            args[1], {
+              aboveAll: !!commandOptions['--aboveAll'],
+              initialCommitOrdering: commandOptions['--solution-ordering']
+            }
+          );
+        }
+        return;
+      }
+
+      command.twoArgsImpliedHead(generalArgs);
+      engine.rebase(generalArgs[0], generalArgs[1], {
+        preserveMerges: commandOptions['-p'] || commandOptions['--preserve-merges']
+      });
+    }
+  },
+
+  status: {
+    dontCountForGolf: true,
+    sc: /^(gst|gs|git st)($|\s)/,
+    regex: /^git +status($|\s)/,
+    execute: function(engine) {
+      // no parsing at all
+      engine.status();
+    }
+  },
+
+  checkout: {
+    sc: /^(go|git co)($|\s)/,
+    regex: /^git +checkout($|\s)/,
+    options: [
+      '-b',
+      '-B',
+      '-'
+    ],
+    execute: function(engine, command) {
+      var commandOptions = command.getOptionsMap();
+      var generalArgs = command.getGeneralArgs();
+
+      var args = null;
+      if (commandOptions['-b']) {
+        // the user is really trying to just make a
+        // branch and then switch to it. so first:
+        args = commandOptions['-b'].concat(generalArgs);
+        command.twoArgsImpliedHead(args, '-b');
+
+        var validId = engine.validateBranchName(args[0]);
+        engine.branch(validId, args[1]);
+        engine.checkout(validId);
+        return;
+      }
+
+      if (commandOptions['-']) {
+        // get the heads last location
+        var lastPlace = engine.HEAD.get('lastLastTarget');
+        if (!lastPlace) {
+          throw new GitError({
+            msg: intl.str('git-result-nothing')
+          });
+        }
+        engine.HEAD.set('target', lastPlace);
+        return;
+      }
+
+      if (commandOptions['-B']) {
+        args = commandOptions['-B'].concat(generalArgs);
+        command.twoArgsImpliedHead(args, '-B');
+
+        engine.forceBranch(args[0], args[1]);
+        engine.checkout(args[0]);
+        return;
+      }
+
+      command.validateArgBounds(generalArgs, 1, 1);
+
+      engine.checkout(engine.crappyUnescape(generalArgs[0]));
+    }
+  },
+
+  push: {
+    regex: /^git +push($|\s)/,
+    options: [
+      '--force'
+    ],
+    execute: function(engine, command) {
+      if (!engine.hasOrigin()) {
+        throw new GitError({
+          msg: intl.str('git-error-origin-required')
+        });
+      }
+
+      var options = {};
+      var destination;
+      var source;
+      var sourceObj;
+      var commandOptions = command.getOptionsMap();
+
+      // git push is pretty complex in terms of
+      // the arguments it wants as well... get ready!
+      var generalArgs = command.getGeneralArgs();
+      command.twoArgsForOrigin(generalArgs);
+      assertOriginSpecified(generalArgs);
+
+      var firstArg = generalArgs[1];
+      if (firstArg && isColonRefspec(firstArg)) {
+        var refspecParts = firstArg.split(':');
+        source = refspecParts[0];
+        destination = validateBranchName(engine, refspecParts[1]);
+        if (source === "" && !engine.origin.refs[destination]) {
+          throw new GitError({
+            msg: intl.todo(
+              'cannot delete branch ' + options.destination + ' which doesnt exist'
+            )
+          });
+        }
+      } else {
+        if (firstArg) {
+          // we are using this arg as destination AND source. the dest branch
+          // can be created on demand but we at least need this to be a source
+          // locally otherwise we will fail
+          assertIsRef(engine, firstArg);
+          sourceObj = engine.resolveID(firstArg);
+        } else {
+          // since they have not specified a source or destination, then
+          // we source from the branch we are on (or HEAD)
+          sourceObj = engine.getOneBeforeCommit('HEAD');
+        }
+        source = sourceObj.get('id');
+
+        // HOWEVER we push to either the remote tracking branch we have
+        // OR a new named branch if we aren't tracking anything
+        if (sourceObj.getRemoteTrackingBranchID &&
+            sourceObj.getRemoteTrackingBranchID()) {
+          assertBranchIsRemoteTracking(engine, source);
+          var remoteBranch = sourceObj.getRemoteTrackingBranchID();
+          destination = engine.refs[remoteBranch].getBaseID();
+        } else {
+          destination = validateBranchName(engine, source);
+        }
+      }
+      if (source) {
+        assertIsRef(engine, source);
+      }
+
+      engine.push({
+        // NOTE -- very important! destination and source here
+        // are always, always strings. very important :D
+        destination: destination,
+        source: source,
+        force: !!commandOptions['--force']
+      });
+    }
+  },
+
+  describe: {
+    regex: /^git +describe($|\s)/,
+    execute: function(engine, command) {
+      // first if there are no tags, we cant do anything so just throw
+      if (engine.tagCollection.toArray().length === 0) {
+        throw new GitError({
+          msg: intl.todo(
+            'fatal: No tags found, cannot describe anything.'
+          )
+        });
+      }
+
+      var generalArgs = command.getGeneralArgs();
+      command.oneArgImpliedHead(generalArgs);
+      assertIsRef(engine, generalArgs[0]);
+
+      engine.describe(generalArgs[0]);
+    }
+  },
+  
+  tag: {
+    regex: /^git +tag($|\s)/,
+    execute: function(engine, command) {
+      var generalArgs = command.getGeneralArgs();
+      if (generalArgs.length === 0) {
+        var tags = engine.getTags();
+        engine.printTags(tags);
+        return;
+      }
+      
+      command.twoArgsImpliedHead(generalArgs);
+      engine.tag(generalArgs[0], generalArgs[1]);
+    }
+  }
 };
 
 var instantCommands = [
-  [/^git help($|\s)/, function() {
+  [/^(git help($|\s)|git$)/, function() {
     var lines = [
       intl.str('git-version'),
       '<br/>',
@@ -28,8 +794,8 @@ var instantCommands = [
       intl.str('git-supported-commands'),
       '<br/>'
     ];
-    var commands = GitOptionParser.prototype.getMasterOptionMap();
 
+    var commands = require('../commands').commands.getOptionMap()['git'];
     // build up a nice display of what we support
     _.each(commands, function(commandOptions, command) {
       lines.push('git ' + command);
@@ -47,146 +813,6 @@ var instantCommands = [
   }]
 ];
 
-var regexMap = {
-  // ($|\s) means that we either have to end the string
-  // after the command or there needs to be a space for options
-  'git commit': /^git +commit($|\s)/,
-  'git add': /^git +add($|\s)/,
-  'git checkout': /^git +checkout($|\s)/,
-  'git rebase': /^git +rebase($|\s)/,
-  'git reset': /^git +reset($|\s)/,
-  'git branch': /^git +branch($|\s)/,
-  'git revert': /^git +revert($|\s)/,
-  'git log': /^git +log($|\s)/,
-  'git merge': /^git +merge($|\s)/,
-  'git show': /^git +show($|\s)/,
-  'git status': /^git +status($|\s)/,
-  'git cherry-pick': /^git +cherry-pick($|\s)/
-};
-
-var parse = function(str) {
-  var method;
-  var options;
-
-  // see if we support this particular command
-  _.each(regexMap, function(regex, thisMethod) {
-    if (regex.exec(str)) {
-      options = str.slice(thisMethod.length + 1);
-      method = thisMethod.slice('git '.length);
-    }
-  });
-
-  if (!method) {
-    return false;
-  }
-
-  // we support this command!
-  // parse off the options and assemble the map / general args
-  var parsedOptions = new GitOptionParser(method, options);
-  return {
-    toSet: {
-      generalArgs: parsedOptions.generalArgs,
-      supportedMap: parsedOptions.supportedMap,
-      method: method,
-      options: options,
-      eventName: 'processGitCommand'
-    }
-  };
-};
-
-/**
- * GitOptionParser
- */
-function GitOptionParser(method, options) {
-  this.method = method;
-  this.rawOptions = options;
-
-  this.supportedMap = this.getMasterOptionMap()[method];
-  if (this.supportedMap === undefined) {
-    throw new Error('No option map for ' + method);
-  }
-
-  this.generalArgs = [];
-  this.explodeAndSet();
-}
-
-GitOptionParser.prototype.getMasterOptionMap = function() {
-  // here a value of false means that we support it, even if its just a
-  // pass-through option. If the value is not here (aka will be undefined
-  // when accessed), we do not support it.
-  return {
-    commit: {
-      '--amend': false,
-      '-a': false, // warning
-      '-am': false, // warning
-      '-m': false
-    },
-    status: {},
-    log: {},
-    add: {},
-    'cherry-pick': {},
-    branch: {
-      '-d': false,
-      '-D': false,
-      '-f': false,
-      '--contains': false
-    },
-    checkout: {
-      '-b': false,
-      '-B': false,
-      '-': false
-    },
-    reset: {
-      '--hard': false,
-      '--soft': false // this will raise an error but we catch it in gitEngine
-    },
-    merge: {},
-    rebase: {
-      '-i': false // the mother of all options
-    },
-    revert: {},
-    show: {}
-  };
-};
-
-GitOptionParser.prototype.explodeAndSet = function() {
-  // split on spaces, except when inside quotes
-
-  var exploded = this.rawOptions.match(/('.*?'|".*?"|\S+)/g) || [];
-
-  for (var i = 0; i < exploded.length; i++) {
-    var part = exploded[i];
-    if (part.slice(0,1) == '-') {
-      // it's an option, check supportedMap
-      if (this.supportedMap[part] === undefined) {
-        throw new CommandProcessError({
-          msg: intl.str(
-            'option-not-supported',
-            { option: part }
-          )
-        });
-      }
-
-      // go through and include all the next args until we hit another option or the end
-      var optionArgs = [];
-      var next = i + 1;
-      while (next < exploded.length && exploded[next].slice(0,1) != '-') {
-        optionArgs.push(exploded[next]);
-        next += 1;
-      }
-      i = next - 1;
-
-      // **phew** we are done grabbing those. theseArgs is truthy even with an empty array
-      this.supportedMap[part] = optionArgs;
-    } else {
-      // must be a general arg
-      this.generalArgs.push(part);
-    }
-  }
-};
-
-exports.shortcutMap = shortcutMap;
+exports.commandConfig = commandConfig;
 exports.instantCommands = instantCommands;
-exports.parse = parse;
-exports.regexMap = regexMap;
 

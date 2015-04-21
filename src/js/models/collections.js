@@ -1,13 +1,11 @@
-var _ = require('underscore');
 var Q = require('q');
-// horrible hack to get localStorage Backbone plugin
-var Backbone = (!require('../util').isBrowser()) ? Backbone = require('backbone') : Backbone = window.Backbone;
+var Backbone = require('backbone');
 
 var Commit = require('../git').Commit;
 var Branch = require('../git').Branch;
+var Tag = require('../git').Tag;
 
 var Command = require('../models/commandModel').Command;
-var CommandEntry = require('../models/commandModel').CommandEntry;
 var TIME = require('../util/constants').TIME;
 
 var CommitCollection = Backbone.Collection.extend({
@@ -22,9 +20,8 @@ var BranchCollection = Backbone.Collection.extend({
   model: Branch
 });
 
-var CommandEntryCollection = Backbone.Collection.extend({
-  model: CommandEntry,
-  localStorage: (Backbone.LocalStorage) ? new Backbone.LocalStorage('CommandEntries') : null
+var TagCollection = Backbone.Collection.extend({
+  model: Tag
 });
 
 var CommandBuffer = Backbone.Model.extend({
@@ -57,9 +54,9 @@ var CommandBuffer = Backbone.Model.extend({
 
 
   setTimeout: function() {
-    this.timeout = setTimeout(_.bind(function() {
+    this.timeout = setTimeout(function() {
         this.sipFromBuffer();
-    }, this), TIME.betweenCommandsDelay);
+    }.bind(this), TIME.betweenCommandsDelay);
   },
 
   popAndProcess: function() {
@@ -81,9 +78,9 @@ var CommandBuffer = Backbone.Model.extend({
     command.set('status', 'processing');
 
     var deferred = Q.defer();
-    deferred.promise.then(_.bind(function() {
+    deferred.promise.then(function() {
       this.setTimeout();
-    }, this));
+    }.bind(this));
 
     var eventName = command.get('eventName');
     if (!eventName) {
@@ -125,6 +122,6 @@ var CommandBuffer = Backbone.Model.extend({
 exports.CommitCollection = CommitCollection;
 exports.CommandCollection = CommandCollection;
 exports.BranchCollection = BranchCollection;
-exports.CommandEntryCollection = CommandEntryCollection;
+exports.TagCollection = TagCollection;
 exports.CommandBuffer = CommandBuffer;
 

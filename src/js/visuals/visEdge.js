@@ -3,6 +3,7 @@ var Backbone = require('backbone');
 var GRAPHICS = require('../util/constants').GRAPHICS;
 
 var VisBase = require('../visuals/visBase').VisBase;
+var GlobalStateStore = require('../stores/GlobalStateStore');
 
 var VisEdge = VisBase.extend({
   defaults: {
@@ -51,6 +52,7 @@ var VisEdge = VisBase.extend({
     // is M(move abs) C (curve to) (control point 1) (control point 2) (final point)
     // the control points have to be __below__ to get the curve starting off straight.
 
+    var flipFactor = (GlobalStateStore.getFlipTreeY()) ? -1 : 1;
     var coords = function(pos) {
       return String(Math.round(pos.x)) + ',' + String(Math.round(pos.y));
     };
@@ -58,19 +60,19 @@ var VisEdge = VisBase.extend({
       delta = delta || GRAPHICS.curveControlPointOffset;
       return {
         x: pos.x,
-        y: pos.y + delta * dir
+        y: pos.y + flipFactor * delta * dir
       };
     };
     var offset2d = function(pos, x, y) {
       return {
         x: pos.x + x,
-        y: pos.y + y
+        y: pos.y + flipFactor * y
       };
     };
 
     // first offset tail and head by radii
     tailPos = offset(tailPos, -1, this.get('tail').getRadius());
-    headPos = offset(headPos, 1, this.get('head').getRadius());
+    headPos = offset(headPos, 1, this.get('head').getRadius() * 1.15);
 
     var str = '';
     // first move to bottom of tail
@@ -130,6 +132,7 @@ var VisEdge = VisBase.extend({
     var stat = this.gitVisuals.getCommitUpstreamStatus(this.get('tail'));
     var map = {
       'branch': 1,
+      'tag': 1,
       'head': GRAPHICS.edgeUpstreamHeadOpacity,
       'none': GRAPHICS.edgeUpstreamNoneOpacity
     };
@@ -167,7 +170,8 @@ var VisEdge = VisBase.extend({
     }
 
     this.get('path').toBack();
-    this.get('path').stop().animate(
+    this.get('path').stop();
+    this.get('path').animate(
       attr.path,
       speed !== undefined ? speed : this.get('animationSpeed'),
       easing || this.get('animationEasing')

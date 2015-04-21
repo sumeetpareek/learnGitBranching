@@ -1,30 +1,48 @@
 var _ = require('underscore');
 var Q = require('q');
-// horrible hack to get localStorage Backbone plugin
-var Backbone = (!require('../util').isBrowser()) ? require('backbone') : window.Backbone;
+var Backbone = require('backbone');
+var LocaleStore = require('../stores/LocaleStore');
 
 var util = require('../util');
 var intl = require('../intl');
 var log = require('../log');
 var KeyboardListener = require('../util/keyboard').KeyboardListener;
 var Main = require('../app');
+var LevelStore = require('../stores/LevelStore');
 
 var ModalTerminal = require('../views').ModalTerminal;
 var ContainedBase = require('../views').ContainedBase;
 var BaseView = require('../views').BaseView;
 
+var LEVELS = require('../../levels');
+
 var LevelDropdownView = ContainedBase.extend({
   tagName: 'div',
   className: 'levelDropdownView box vertical',
   template: _.template($('#level-dropdown-view').html()),
+  events: {
+    'click div.levelDropdownTab': 'onTabClick'
+  },
 
   initialize: function(options) {
     options = options || {};
-    this.JSON = {};
+    var queryParams = util.parseQueryString(
+      window.location.href
+    );
+    this.JSON = {
+      selectedTab: queryParams.defaultTab || 'main',
+      tabs: [{
+        id: 'main',
+        name: intl.todo('Main')
+      }, {
+        id: 'remote',
+        name: intl.todo('Remote')
+      }]
+    };
 
     this.navEvents = _.clone(Backbone.Events);
     this.navEvents.on('clickedID', _.debounce(
-      _.bind(this.loadLevelID, this),
+      this.loadLevelID.bind(this),
       300,
       true
     ));
@@ -44,18 +62,24 @@ var LevelDropdownView = ContainedBase.extend({
       wait: true
     });
 
-    this.sequences = Main.getLevelArbiter().getSequences();
-    this.sequenceToLevels = Main.getLevelArbiter().getSequenceToLevels();
+    this.sequences = LevelStore.getSequences();
+    this.sequenceToLevels = LevelStore.getSequenceToLevels();
 
     this.container = new ModalTerminal({
       title: intl.str('select-a-level')
     });
 
+    // Lol WTF. For some reason we cant use this.render.bind(this) so
+    // instead setup a lame callback version. The CasperJS tests
+    // fail otherwise.
+    var that = this;
+    LocaleStore.subscribe(function() {
+      that.render.apply(that);
+    });
+    LevelStore.subscribe(function() {
+      that.render();
+    });
     this.render();
-
-    Main.getEvents().on('resetMapSolved', this.render, this);
-    Main.getEvents().on('localeChanged', this.render, this);
-
     if (!options.wait) {
       this.show();
     }
@@ -64,6 +88,26 @@ var LevelDropdownView = ContainedBase.extend({
   render: function() {
     LevelDropdownView.__super__.render.apply(this, arguments);
     this.buildSequences();
+  },
+
+  onTabClick: function(ev) {
+    var srcElement = ev.target || ev.srcElement;
+    var id = $(srcElement).attr('data-id');
+    if (id === this.JSON.selectedTab) {
+      return;
+    }
+    this.selectedTab = id;
+    this.updateTabTo(id);
+  },
+
+  updateTabTo: function(id) {
+    this.JSON.selectedTab = id;
+    this.render();
+    if (this.selectedID) {
+      this.selectedSequence = this.getSequencesOnTab()[0];
+      this.selectedIndex = 0;
+      this.updateSelectedIcon();
+    }
   },
 
   positive: function() {
@@ -80,11 +124,32 @@ var LevelDropdownView = ContainedBase.extend({
     this.leftOrRight(-1);
   },
 
-  leftOrRight: function(delta) {
-    this.deselectIconByID(this.selectedID);
-    this.selectedIndex = this.wrapIndex(this.selectedIndex + delta, this.getCurrentSequence());
+  updateSelectedIcon: function() {
     this.selectedID = this.getSelectedID();
     this.selectIconByID(this.selectedID);
+  },
+
+  leftOrRight: function(delta) {
+    this.deselectIconByID(this.selectedID);
+    var index = this.selectedIndex + delta;
+
+    var sequence = this.getCurrentSequence();
+    var tabs = this.JSON.tabs;
+    // switch tabs now if needed / possible
+    if (index >= sequence.length &&
+        this.getTabIndex() + 1 < tabs.length) {
+      this.switchToTabIndex(this.getTabIndex() + 1);
+      this.selectedIndex = 0;
+    } else if (index < 0 &&
+               this.getTabIndex() - 1 >= 0) {
+      this.switchToTabIndex(this.getTabIndex() - 1);
+      this.selectedIndex = 0;
+    } else {
+      this.selectedIndex = this.wrapIndex(
+        this.selectedIndex + delta, this.getCurrentSequence()
+      );
+    }
+    this.updateSelectedIcon();
   },
 
   right: function() {
@@ -113,8 +178,7 @@ var LevelDropdownView = ContainedBase.extend({
   downOrUp: function() {
     this.selectedIndex = this.boundIndex(this.selectedIndex, this.getCurrentSequence());
     this.deselectIconByID(this.selectedID);
-    this.selectedID = this.getSelectedID();
-    this.selectIconByID(this.selectedID);
+    this.updateSelectedIcon();
   },
 
   turnOnKeyboardSelection: function() {
@@ -133,6 +197,18 @@ var LevelDropdownView = ContainedBase.extend({
     this.selectedSequence = undefined;
   },
 
+  getTabIndex: function() {
+    var ids = _.map(this.JSON.tabs, function(tab) {
+      return tab.id;
+    });
+    return ids.indexOf(this.JSON.selectedTab);
+  },
+
+  switchToTabIndex: function(index) {
+    var tabID = this.JSON.tabs[index].id;
+    this.updateTabTo(tabID);
+  },
+
   wrapIndex: function(index, arr) {
     index = (index >= arr.length) ? 0 : index;
     index = (index < 0) ? arr.length - 1 : index;
@@ -145,33 +221,40 @@ var LevelDropdownView = ContainedBase.extend({
     return index;
   },
 
+  getSequencesOnTab: function() {
+    return _.filter(this.sequences, function(sequenceName) {
+      var tab = LEVELS.getTabForSequence(sequenceName);
+      return tab === this.JSON.selectedTab;
+    }, this);
+  },
+
   getNextSequence: function() {
     var current = this.getSequenceIndex(this.selectedSequence);
-    var desired = this.wrapIndex(current + 1, this.sequences);
-    return this.sequences[desired];
+    var desired = this.wrapIndex(current + 1, this.getSequencesOnTab());
+    return this.getSequencesOnTab()[desired];
   },
 
   getPreviousSequence: function() {
     var current = this.getSequenceIndex(this.selectedSequence);
-    var desired = this.wrapIndex(current - 1, this.sequences);
-    return this.sequences[desired];
+    var desired = this.wrapIndex(current - 1, this.getSequencesOnTab());
+    return this.getSequencesOnTab()[desired];
   },
 
   getSequenceIndex: function(name) {
-    var index = this.sequences.indexOf(name);
+    var index = this.getSequencesOnTab().indexOf(name);
     if (index < 0) { throw new Error('didnt find'); }
     return index;
   },
 
   getIndexForID: function(id) {
-    return Main.getLevelArbiter().getLevel(id).index;
+    return LevelStore.getLevel(id).index;
   },
 
   selectFirst: function() {
-    var firstID = this.sequenceToLevels[this.sequences[0]][0].id;
+    var firstID = this.sequenceToLevels[this.getSequencesOnTab()[0]][0].id;
     this.selectIconByID(firstID);
     this.selectedIndex = 0;
-    this.selectedSequence = this.sequences[0];
+    this.selectedSequence = this.getSequencesOnTab()[0];
   },
 
   getCurrentSequence: function() {
@@ -194,6 +277,15 @@ var LevelDropdownView = ContainedBase.extend({
     this.selectedID = id;
     var selector = '#levelIcon-' + id;
     $(selector).toggleClass('selected', value);
+
+    // also go find the series and update the about
+    _.each(this.seriesViews, function(view) {
+      if (view.levelIDs.indexOf(id) === -1) {
+        view.resetAbout();
+        return;
+      }
+      view.updateAboutForLevelID(id);
+    }, this);
   },
 
   negative: function() {
@@ -231,7 +323,7 @@ var LevelDropdownView = ContainedBase.extend({
         'commandSubmitted',
         'level ' + id
       );
-      var level = Main.getLevelArbiter().getLevel(id);
+      var level = LevelStore.getLevel(id);
       var name = level.name.en_US;
       log.levelSelected(name);
     }
@@ -246,7 +338,7 @@ var LevelDropdownView = ContainedBase.extend({
 
   buildSequences: function() {
     this.seriesViews = [];
-    _.each(this.sequences, function(sequenceName) {
+    _.each(this.getSequencesOnTab(), function(sequenceName) {
       this.seriesViews.push(new SeriesView({
         destination: this.$el,
         name: sequenceName,
@@ -269,8 +361,8 @@ var SeriesView = BaseView.extend({
   initialize: function(options) {
     this.name = options.name || 'intro';
     this.navEvents = options.navEvents;
-    this.info = Main.getLevelArbiter().getSequenceInfo(this.name);
-    this.levels = Main.getLevelArbiter().getLevelsInSequence(this.name);
+    this.info = LevelStore.getSequenceInfo(this.name);
+    this.levels = LevelStore.getLevelsInSequence(this.name);
 
     this.levelIDs = [];
     _.each(this.levels, function(level) {
@@ -295,7 +387,7 @@ var SeriesView = BaseView.extend({
     // property changing but it's the 11th hour...
     var toLoop = this.$('div.levelIcon').each(function(index, el) {
       var id = $(el).attr('data-id');
-      $(el).toggleClass('solved', Main.getLevelArbiter().isLevelSolved(id));
+      $(el).toggleClass('solved', LevelStore.isLevelSolved(id));
     });
   },
 
@@ -315,7 +407,11 @@ var SeriesView = BaseView.extend({
 
   enterIcon: function(ev) {
     var id = this.getEventID(ev);
-    var level = Main.getLevelArbiter().getLevel(id);
+    this.updateAboutForLevelID(id);
+  },
+
+  updateAboutForLevelID: function(id) {
+    var level = LevelStore.getLevel(id);
     this.setAbout(intl.getName(level));
   },
 

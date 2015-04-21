@@ -16,14 +16,24 @@ exports.level = {
   "name": {
     "ko": "딱 한개의 커밋만 가져오기",
     "en_US": "Grabbing Just 1 Commit",
-    "ja": "Grabbing Just 1 Commit",
-    "zh_CN": "私藏一个提交"
+    "fr_FR": "Choisir seulement 1 commit",
+    "de_DE": "Einen Commit pflücken",
+    "es_AR": "Tomando un único commit",
+    "pt_BR": "Pegando um único commit",
+    "ja": "一つのコミットのみを取得",
+    "zh_CN": "只取一个 commit",
+    "zh_TW": "只取一個 commit"
   },
   "hint": {
     "en_US": "Remember, interactive rebase or cherry-pick is your friend here",
+    "de_DE": "Vergiss nicht: hier kommst du mit interaktivem Rebase oder Cherry-Picking weiter",
+    "fr_FR": "Souvenez-vous, les rebases interactifs ou cherry-pick sont vos amis ici.",
+    "es_AR": "Acordate, el rebase interactivo o cherry-pick son tus amigos acá",
+    "pt_BR": "Lembre-se, o rebase interativo ou o cherry-pick são seus amigos aqui",
     "ja": "このレベルではインタラクティブモードのrebaseやcherry-pickがクリアのカギです",
     "ko": "대화식 리베이스(rebase -i)나 or 체리픽(cherry-pick)을 사용하세요",
-    "zh_CN": "记住，交互式 rebase 或者 cherry-pick 会很有帮助"
+    "zh_CN": "记住，交互式 rebase 或者 cherry-pick 会很有帮助",
+    "zh_TW": "記住，使用互動式的 rebase 或者 cherry-pick 會很有幫助"
   },
   "startDialog": {
     "en_US": {
@@ -36,9 +46,9 @@ exports.level = {
               "",
               "Here's a development situation that often happens: I'm trying to track down a bug but it is quite elusive. In order to aid in my detective work, I put in a few debug commands and a few print statements.",
               "",
-              "All of these debugging / print statements are in their own branches. Finally I track down the bug, fix it, and rejoice!",
+              "All of these debugging / print statements are in their own commits. Finally I track down the bug, fix it, and rejoice!",
               "",
-              "Only problem is that I now need to get my `bugFix` back into the `master` branch! I could simply fast-forward `master`, but then `master` would get all my debug statements."
+              "Only problem is that I now need to get my `bugFix` back into the `master` branch. If I simply fast-forwarded `master`, then `master` would get all my debug statements which is undesirable. There has to be another way..."
             ]
           }
         },
@@ -46,14 +56,12 @@ exports.level = {
           "type": "ModalAlert",
           "options": {
             "markdowns": [
-              "This is where the magic of Git comes in. There are a few ways to do this, but the two most straightforward ways are:",
+              "We need to tell git to copy only one of the commits over. This is just like the levels earlier on moving work around -- we can use the same commands:",
               "",
               "* `git rebase -i`",
               "* `git cherry-pick`",
               "",
-              "Interactive (the `-i`) rebasing allows you to choose which commits you want to keep or discard. It also allows you to reorder commits. This can be helpful if you want to toss out some work.",
-              "",
-              "Cherry-picking allows you to pick individual commits and plop them down on top of `HEAD`"
+              "To achieve this goal."
             ]
           }
         },
@@ -61,12 +69,166 @@ exports.level = {
           "type": "ModalAlert",
           "options": {
             "markdowns": [
-              "This is a later level so we will leave it up to you to decide, but in order to complete the level, make sure `master` receives the commit that `bugFix` references."
+              "This is a later level so we will leave it up to you to decide which command you want to use, but in order to complete the level, make sure `master` receives the commit that `bugFix` references."
             ]
           }
         }
       ]
     },
+    "fr_FR": {
+      "childViews": [
+        {
+          "type": "ModalAlert",
+          "options": {
+            "markdowns": [
+              "## Les commits empilés localement",
+              "",
+              "Voici une situation qui arrive souvent : j'ai un bug assez caché à corriger. Pour trouver la source je rajoute des commandes et prints de debug à travers le code.",
+              "",
+              "Tous ces debug se retrouvent dans une branche particulière. Je trouve le bug et le répare, comme toujours !",
+              "",
+              "Le seul problème c'est que je ne peux pas faire de merge ou rebase, car tous ces commits de debug seront dans le master. Il doit y avoir une autre façon..."
+            ]
+          }
+        },
+        {
+          "type": "ModalAlert",
+          "options": {
+            "markdowns": [
+              "Pour réussir ce niveau, nous avons besoin de dire à Git quel commit particulier recopier. C'est comme pour le niveau précédent -- nous pouvons utiliser les mêmes commandes :",
+              "",
+              "* `git rebase -i`",
+              "* `git cherry-pick`"
+            ]
+          }
+        },
+        {
+          "type": "ModalAlert",
+          "options": {
+            "markdowns": [
+              "C'est un niveau avancé, donc à vous de choisir quelle commande utiliser, mais pour réussir ce niveau, assurez-vous que `master` reçoive le même commit que `bugFix` référence."
+            ]
+          }
+        }
+      ]
+    },
+    "es_AR": {
+      "childViews": [
+        {
+          "type": "ModalAlert",
+          "options": {
+            "markdowns": [
+              "## Commits localmente stackeados",
+              "",
+              "Esta es una escena que suele pasar cuando uno desarrolla: estoy tratando de encontrar un bug bastante escurridizo. Para ayudar en mi tarea de detective, agrego un par de comandos de debug, y algunas sentencias para imprimir el estado de mi sistema.",
+              "",
+              "Todas estas cosas de imprimir y debuggear estan en su propia rama. Finalmente encuentro el problema, lo soluciono, ¡y disfruto!",
+              "",
+              "El único problema es que ahora necesito llevar mi `bugFix` a la rama `master`. Si simplemente fast-forwardeo `master`, entonces `master` va a tener todos mis agregados de debugging, que es indeseado. Tiene que haber otro modo..."
+            ]
+          }
+        },
+        {
+          "type": "ModalAlert",
+          "options": {
+            "markdowns": [
+              "Necesitamos decirle a git que sólo copie uno de los commits. Esto es tal como los niveles anteriores de mover commits por ahí -- podemos usar los mismos comandos:",
+              "",
+              "* `git rebase -i`",
+              "* `git cherry-pick`",
+              "",
+              "Para conseguir este resultado."
+            ]
+          }
+        },
+        {
+          "type": "ModalAlert",
+          "options": {
+            "markdowns": [
+              "Este es un nivel más avanzado, así que está en vos decidir cuál de los dos comandos querés usar, pero para completar el nivel asegurate de que `master` recibe el commit que `bugFix` referencia."
+            ]
+          }
+        }
+      ]
+    },
+    "pt_BR": {
+      "childViews": [
+        {
+          "type": "ModalAlert",
+          "options": {
+            "markdowns": [
+              "## Commits empilhados localmente",
+              "",
+              "Aqui está uma situação de acontece frequentemente com desenvolvedores: Estou tentando encontrar um bug, mas ele é escorregadio. Para auxiliar meu trabalho de detetive, eu coloco alguns comandos de debug e prints.",
+              "",
+              "Todos esses comandos de debug e mensagens estão em seus próprios ramos. Finalmente eu encontro o bug, corrijo, e me regozijo!",
+              "",
+              "O único problema é que agora eu preciso devolver o meu `bugFix` ao ramo `master`. Se eu simplesmente der um fast-forward no `master`, então o `master` terminará contendo todos os comandos de debug, o que é indesejável. Deve existir alguma outra forma..."
+            ]
+          }
+        },
+        {
+          "type": "ModalAlert",
+          "options": {
+            "markdowns": [
+              "Precisamos dizer ao git para copiar somente um dos commits. Esta situação é exatamente a mesma dos níveis anteriores a respeito de como mover trabalho -- podemos usar os mesmos comandos:",
+              "",
+              "* `git rebase -i`",
+              "* `git cherry-pick`",
+              "",
+              "Para alcançar o objetivo."
+            ]
+          }
+        },
+        {
+          "type": "ModalAlert",
+          "options": {
+            "markdowns": [
+              "Este é um nível avançado, então vamos deixar para você a decisão de qual comando usar, mas para completar este nível, certifique-se de que o `master` receba o commit referenciado por `bugFix`."
+            ]
+          }
+        }
+      ]
+    },
+    "de_DE": {
+      "childViews": [
+        {
+          "type": "ModalAlert",
+          "options": {
+            "markdowns": [
+              "## Lokale Commit-Haufen",
+              "",
+              "Folgende Situation habe ich beim Entwickeln des öfteren: ich bin auf der Suche nach einem Bug, aber er ist echt schwer zu finden. Um ihm auf die Spur zu kommen schreibe ich mehrere Debug-Kommandos und print-Befehle in den Code.",
+              "",
+              "Die committe ich auch immer wieder, je weiter die Suche mich trägt; natürlich in einem lokalen Branch. Schließlich finde ich den Bug, fixe ihn und freue mich!",
+              "",
+              "Einziges Problem ist, dass ich diesen `bugFix` jetzt zurück in den `master` kriegen muss. Wenn ich einfach den `master` vorspule oder meinen Branch hinein merge, bekäme der `master` auch die ganzen Debug-Befehle, was nicht gewünscht ist. Das muss anders gehen ..."
+            ]
+          }
+        },
+        {
+          "type": "ModalAlert",
+          "options": {
+            "markdowns": [
+              "Wir müssten Git sagen können, dass es nur einen Commit herüber kopieren soll. Das ist genauso wie die Level vorhin zum Code-Verschieben. Wir können dieselben Befehle benutzen:",
+              "",
+              "* `git rebase -i`",
+              "* `git cherry-pick`",
+              ""
+            ]
+          }
+        },
+        {
+          "type": "ModalAlert",
+          "options": {
+            "markdowns": [
+              "Da dies ein späterer Level ist überlasse ich es dir zu entscheiden, welchen Befehl du benutzen willst. Aber um da Level zu schaffen musst du irgendwie sicherstellen, dass `maste` den Commit bekommt, auf den `bugFix` zeigt."
+            ]
+          }
+        }
+      ]
+    },
+    // INTL out of sync :(
     "ja": {
       "childViews": [
         {
@@ -116,11 +278,11 @@ exports.level = {
             "markdowns": [
               "## 本地栈式提交 (Locally stacked commits)",
               "",
-              "设想一下一个经常发生的场景：我在追踪一个有点棘手的 bug，为了更好地排查，我添加了一些 debug 语句和打印语句。",
+              "设想一下一个经常发生的场景：我在追踪一个有点棘手的 bug，为了更好地排查，我添加了一些调试命令和打印语句。",
               "",
-              "所有的这些调试和打印语句到只在它们的分支里。最终我终于找到这个 bug，揪出来 fix 掉，然后撒花庆祝！",
+              "所有的这些调试和打印语句都只在它们自己的分支里。最终我终于找到这个 bug，揪出来 fix 掉，然后撒花庆祝！",
               "",
-              "但有个问题就是现在我要把 `bugFix` 分支的工作合并回 `master` 分支上，我可以简单地快进（fast-forward） `master` 分支，但这样的话 `master` 分支就会包含我这些调试语句了。"
+              "现在唯一的问题就是要把我在 `bugFix` 分支里的工作合并回 `master` 分支。我可以简单地把 `master` 分支快进（fast-forward），但这样的话 `master` 分支就会包含我这些调试语句了。"
             ]
           }
         },
@@ -128,7 +290,7 @@ exports.level = {
           "type": "ModalAlert",
           "options": {
             "markdowns": [
-              "现在就是 Git 大显神通的时候啦。我们有几种方法来解决这个问题，但最直接的方法是：",
+              "现在就是 Git 大显神通的时候啦。解决这个问题的方法不止一个，但最直接的两个方法是：",
               "",
               "* `git rebase -i`",
               "* `git cherry-pick`",
@@ -144,6 +306,45 @@ exports.level = {
           "options": {
             "markdowns": [
               "本关是可选关卡，玩不玩随便你。但是如果你坚持要刷，确保 `master` 分支能拿到 `bugFix` 分支的相关提交（references）。"
+            ]
+          }
+        }
+      ]
+    },
+    "zh_TW": {
+      "childViews": [
+        {
+          "type": "ModalAlert",
+          "options": {
+            "markdowns": [
+              "## 在 local 的堆疊的 commit",
+              "",
+              "有一個經常發生的情況：我在追蹤一個有點棘手的 bug，但是它實在太難抓出來了，在不得已的情況下我加入了一些 debug 的指令，並且做了一些 commit。",
+              "",
+              "所有的這些 debug 的指令都只在 `bugFix` 這個 branch 裡面。最後我終於找到這個 bug，並且 fix 掉它，接著撒花慶祝一下！",
+              "",
+              "現在唯一的問題就是要把我在 `bugFix` branch 裡面所做的修改 merge 回 `master` branch。我可以簡單地透過 fast-forward 來 merge ，但這樣的話 `master` branch 就會包含這些含有 debug 指令的 commit 了。我相信一定有其它方法..."
+            ]
+          }
+        },
+        {
+          "type": "ModalAlert",
+          "options": {
+            "markdowns": [
+              "我們需要告訴 git 只去複製其中一個 commit。 這種情況跟之前的關卡有一點類似，我們可以使用一樣的指令",
+              "",
+              "* `git rebase -i`",
+              "* `git cherry-pick`",
+              "",
+              "來完成這個目的。"
+            ]
+          }
+        },
+        {
+          "type": "ModalAlert",
+          "options": {
+            "markdowns": [
+              "這一個關卡是比較後面的關卡，你可以隨意決定你要選擇使用哪個指令，但是 `bugFix` 所指向的那個 commit 一定要可以被 `master` branch 包含到。"
             ]
           }
         }

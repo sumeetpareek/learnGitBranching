@@ -3,10 +3,11 @@ var Backbone = require('backbone');
 var GRAPHICS = require('../util/constants').GRAPHICS;
 
 var VisBase = require('../visuals/visBase').VisBase;
+var TreeCompare = require('../graph/treeCompare');
 
 var randomHueString = function() {
   var hue = Math.random();
-  var str = 'hsb(' + String(hue) + ',0.7,1)';
+  var str = 'hsb(' + String(hue) + ',0.6,1)';
   return str;
 };
 
@@ -65,6 +66,7 @@ var VisBranch = VisBase.extend({
       // switch to a head ref
       this.set('isHead', true);
       this.set('flip', -1);
+      this.refreshOffset();
 
       this.set('fill', GRAPHICS.headRectFill);
     } else if (id !== 'master') {
@@ -77,21 +79,53 @@ var VisBranch = VisBase.extend({
     var commit = this.gitEngine.getCommitFromRef(this.get('branch'));
     var visNode = commit.get('visNode');
 
-    this.set('flip', this.getFlipBool(commit, visNode));
+    this.set('flip', this.getFlipValue(commit, visNode));
+    this.refreshOffset();
     return visNode.getScreenCoords();
   },
 
-  getFlipBool: function(commit, visNode) {
+  getDashArray: function() {
+    if (!this.get('gitVisuals').getIsGoalVis()) {
+      return '';
+    }
+    return (this.getIsLevelBranchCompared()) ? '' : '--';
+  },
+
+  getIsGoalAndNotCompared: function() {
+    if (!this.get('gitVisuals').getIsGoalVis()) {
+      return false;
+    }
+
+    return !this.getIsLevelBranchCompared();
+  },
+
+  /**
+   * returns true if we are a branch that is not being
+   * compared in the goal (used in a goal visualization context
+   */
+  getIsLevelBranchCompared: function() {
+    if (this.getIsMaster()) {
+      return true; // master always compared
+    }
+    // we are not master, so return true if its not just master being compared
+    var levelBlob = this.get('gitVisuals').getLevelBlob();
+    return !TreeCompare.onlyMasterCompared(levelBlob);
+  },
+
+  getIsMaster: function() {
+    return this.get('branch').get('id') == 'master';
+  },
+
+  getFlipValue: function(commit, visNode) {
     var threshold = this.get('gitVisuals').getFlipPos();
     var overThreshold = (visNode.get('pos').x > threshold);
 
     // easy logic first
+    if (commit.get('id') === 'C0') {
+      return -1;
+    }
     if (!this.get('isHead')) {
-      if (this.getIsRemote()) {
-        return (overThreshold) ? 1 : -1;
-      } else {
-        return (overThreshold) ? -1 : 1;
-      }
+      return (overThreshold) ? -1 : 1;
     }
 
     // now for HEAD....
@@ -101,6 +135,27 @@ var VisBranch = VisBase.extend({
       return (this.isBranchStackEmpty()) ? -1 : 1;
     } else {
       return (this.isBranchStackEmpty()) ? 1 : -1;
+    }
+  },
+
+  refreshOffset: function() {
+    var baseOffsetX = GRAPHICS.nodeRadius * 4.75;
+    var offsetY = 33;
+    var deltaX = 10;
+    if (this.get('flip') === 1) {
+      this.set('offsetY', -offsetY);
+      this.set('offsetX', baseOffsetX - deltaX);
+    } else {
+      this.set('offsetY', offsetY);
+      this.set('offsetX', baseOffsetX - deltaX);
+    }
+  },
+
+  getArrowTransform: function() {
+    if (this.get('flip') === 1) {
+      return 't-2,-20R-35';
+    } else {
+      return 't2,20R-35';
     }
   },
 
@@ -296,8 +351,14 @@ var VisBranch = VisBase.extend({
   getName: function() {
     var name = this.get('branch').getName();
     var selected = this.get('branch') === this.gitEngine.HEAD.get('target');
+    var isRemote = this.getIsRemote();
+    var isHg = this.gitEngine.getIsHg();
 
-    var after = (selected) ? '*' : '';
+    if (name === 'HEAD' && isHg) {
+      name = '.';
+    }
+
+    var after = (selected && !this.getIsInOrigin() && !isRemote) ? '*' : '';
     return name + after;
   },
 
@@ -337,32 +398,42 @@ var VisBranch = VisBase.extend({
     this.gitVisuals.removeVisBranch(this);
   },
 
+  handleModeChange: function() {
+
+  },
+
   genGraphics: function(paper) {
     var textPos = this.getTextPosition();
     var name = this.getName();
-    var text;
 
     // when from a reload, we dont need to generate the text
-    text = paper.text(textPos.x, textPos.y, String(name));
+    var text = paper.text(textPos.x, textPos.y, String(name));
     text.attr({
       'font-size': 14,
       'font-family': 'Monaco, Courier, font-monospace',
       opacity: this.getTextOpacity()
     });
     this.set('text', text);
+    var attr = this.getAttributes();
 
     var rectPos = this.getRectPosition();
     var sizeOfRect = this.getRectSize();
     var rect = paper
       .rect(rectPos.x, rectPos.y, sizeOfRect.w, sizeOfRect.h, 8)
-      .attr(this.getAttributes().rect);
+      .attr(attr.rect);
     this.set('rect', rect);
 
     var arrowPath = this.getArrowPath();
     var arrow = paper
       .path(arrowPath)
-      .attr(this.getAttributes().arrow);
+      .attr(attr.arrow);
     this.set('arrow', arrow);
+
+    // set CSS
+    var keys = ['text', 'rect', 'arrow'];
+    _.each(keys, function(key) {
+      $(this.get(key).node).css(attr.css);
+    }, this);
 
     this.attachClickHandlers();
     rect.toFront();
@@ -373,16 +444,29 @@ var VisBranch = VisBase.extend({
     if (this.get('gitVisuals').options.noClick) {
       return;
     }
-    var commandStr = 'git checkout ' + this.get('branch').get('id');
-    var Main = require('../app');
-    var objs = [this.get('rect'), this.get('text'), this.get('arrow')];
+    var objs = [
+      this.get('rect'),
+      this.get('text'),
+      this.get('arrow')
+    ];
 
     _.each(objs, function(rObj) {
-      rObj.click(function() {
-        Main.getEventBaton().trigger('commandSubmitted', commandStr);
-      });
-      $(rObj.node).css('cursor', 'pointer');
-    });
+      rObj.click(this.onClick.bind(this));
+    }, this);
+  },
+
+  shouldDisableClick: function() {
+    return this.get('isHead') && !this.gitEngine.getDetachedHead();
+  },
+
+  onClick: function() {
+    if (this.shouldDisableClick()) {
+      return;
+    }
+
+    var commandStr = 'git checkout ' + this.get('branch').get('id');
+    var Main = require('../app');
+    Main.getEventBaton().trigger('commandSubmitted', commandStr);
   },
 
   updateName: function() {
@@ -395,18 +479,34 @@ var VisBranch = VisBase.extend({
     if (this.get('isHead')) {
       return this.gitEngine.getDetachedHead() ? 1 : 0;
     }
-    return this.getBranchStackIndex() === 0 ? 1 : 0.0;
+    if (this.getBranchStackIndex() !== 0) {
+      return 0.0;
+    }
+
+    return 1;
   },
 
   getTextOpacity: function() {
     if (this.get('isHead')) {
       return this.gitEngine.getDetachedHead() ? 1 : 0;
     }
+
+    if (this.getIsGoalAndNotCompared()) {
+      return (this.getBranchStackIndex() === 0) ? 0.7 : 0.3;
+    }
+
     return 1;
   },
 
+  getStrokeWidth: function() {
+    if (this.getIsGoalAndNotCompared()) {
+      return this.get('stroke-width') / 5.0;
+    }
+    
+    return this.get('stroke-width');
+  },
+
   getAttributes: function() {
-    var nonTextOpacity = this.getNonTextOpacity();
     var textOpacity = this.getTextOpacity();
     this.updateName();
 
@@ -415,9 +515,15 @@ var VisBranch = VisBase.extend({
     var rectSize = this.getRectSize();
 
     var arrowPath = this.getArrowPath();
-    var dashArray = (this.getIsRemote()) ? '--' : '';
+    var dashArray = this.getDashArray();
+    var cursorStyle = (this.shouldDisableClick()) ?
+      'auto' :
+      'pointer';
 
     return {
+      css: {
+        cursor: cursorStyle
+      },
       text: {
         x: textPos.x,
         y: textPos.y,
@@ -428,18 +534,20 @@ var VisBranch = VisBase.extend({
         y: rectPos.y,
         width: rectSize.w,
         height: rectSize.h,
-        opacity: nonTextOpacity,
+        opacity: this.getNonTextOpacity(),
         fill: this.getFill(),
         stroke: this.get('stroke'),
         'stroke-dasharray': dashArray,
-        'stroke-width': this.get('stroke-width')
+        'stroke-width': this.getStrokeWidth()
       },
       arrow: {
         path: arrowPath,
-        opacity: nonTextOpacity,
+        opacity: this.getNonTextOpacity(),
         fill: this.getFill(),
         stroke: this.get('stroke'),
-        'stroke-width': this.get('stroke-width')
+        transform: this.getArrowTransform(),
+        'stroke-dasharray': dashArray,
+        'stroke-width': this.getStrokeWidth()
       }
     };
   },
@@ -455,20 +563,9 @@ var VisBranch = VisBase.extend({
     this.animateToAttr(toAttr, speed, easing);
   },
 
-  animateToAttr: function(attr, speed, easing) {
-    if (speed === 0) {
-      this.get('text').attr(attr.text);
-      this.get('rect').attr(attr.rect);
-      this.get('arrow').attr(attr.arrow);
-      return;
-    }
-
-    var s = speed !== undefined ? speed : this.get('animationSpeed');
-    var e = easing || this.get('animationEasing');
-
-    this.get('text').stop().animate(attr.text, s, e);
-    this.get('rect').stop().animate(attr.rect, s, e);
-    this.get('arrow').stop().animate(attr.arrow, s, e);
+  setAttr: function(attr, instant, speed, easing) {
+    var keys = ['text', 'rect', 'arrow'];
+    this.setAttrBase(keys, attr, instant, speed, easing);
   }
 });
 

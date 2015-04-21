@@ -60,13 +60,12 @@ var VisNode = VisBase.extend({
     this.set('depth', Math.max(this.get('depth') || 0, depth));
   },
 
-  setDepthBasedOn: function(depthIncrement) {
+  setDepthBasedOn: function(depthIncrement, offset) {
     if (this.get('depth') === undefined) {
-      debugger;
       throw new Error('no depth yet!');
     }
     var pos = this.get('pos');
-    pos.y = this.get('depth') * depthIncrement;
+    pos.y = this.get('depth') * depthIncrement + offset;
   },
 
   getMaxWidthScaled: function() {
@@ -75,6 +74,7 @@ var VisNode = VisBase.extend({
     var stat = this.gitVisuals.getCommitUpstreamStatus(this.get('commit'));
     var map = {
       branch: 1,
+      tag: 1,
       head: 0.3,
       none: 0.1
     };
@@ -90,6 +90,7 @@ var VisNode = VisBase.extend({
   getOpacity: function() {
     var map = {
       'branch': 1,
+      'tag' : 1,
       'head': GRAPHICS.upstreamHeadOpacity,
       'none': GRAPHICS.upstreamNoneOpacity
     };
@@ -109,6 +110,8 @@ var VisNode = VisBase.extend({
     var pos = this.getScreenCoords();
     var textPos = this.getTextScreenCoords();
     var opacity = this.getOpacity();
+    var dashArray = (this.getIsInOrigin()) ?
+      GRAPHICS.originDash : '';
 
     return {
       circle: {
@@ -118,6 +121,7 @@ var VisNode = VisBase.extend({
         r: this.getRadius(),
         fill: this.getFill(),
         'stroke-width': this.get('stroke-width'),
+        'stroke-dasharray': dashArray,
         stroke: this.get('stroke')
       },
       text: {
@@ -128,6 +132,16 @@ var VisNode = VisBase.extend({
     };
   },
 
+  animatePositionTo: function(visNode, speed, easing) {
+    var attributes = this.getAttributes();
+    var destAttributes = visNode.getAttributes();
+
+    // TODO make not hardcoded
+    attributes.circle = destAttributes.circle;
+    attributes.text = destAttributes.text;
+    this.animateToAttr(attributes, speed, easing);
+  },
+
   highlightTo: function(visObj, speed, easing) {
     // a small function to highlight the color of a node for demonstration purposes
     var color = visObj.get('fill');
@@ -136,6 +150,7 @@ var VisNode = VisBase.extend({
       circle: {
         fill: color,
         stroke: color,
+        'stroke-dasharray': '',
         'stroke-width': this.get('stroke-width') * 5
       },
       text: {}
@@ -162,18 +177,15 @@ var VisNode = VisBase.extend({
     this.animateToAttr(snapShot[this.getID()], speed, easing);
   },
 
-  animateToAttr: function(attr, speed, easing) {
-    if (speed === 0) {
-      this.get('circle').attr(attr.circle);
-      this.get('text').attr(attr.text);
-      return;
-    }
+  setAttr: function(attr, instant, speed, easing) {
+    var keys = ['text', 'circle'];
+    this.setAttrBase(keys, attr, instant, speed, easing);
+  },
 
+  animateToAttr: function(attr, speed, easing) {
+    VisBase.prototype.animateToAttr.apply(this, arguments);
     var s = speed !== undefined ? speed : this.get('animationSpeed');
     var e = easing || this.get('animationEasing');
-
-    this.get('circle').stop().animate(attr.circle, s, e);
-    this.get('text').stop().animate(attr.text, s, e);
 
     if (easing == 'bounce' &&
         attr.circle && attr.circle.cx !== undefined &&
@@ -278,7 +290,8 @@ var VisNode = VisBase.extend({
     _.each(this.get('outgoingEdges'), function(edge) {
       var headPos = edge.get('head').getScreenCoords();
       var path = edge.genSmoothBezierPathStringFromCoords(parentCoords, headPos);
-      edge.get('path').stop().attr({
+      edge.get('path').stop();
+      edge.get('path').attr({
         path: path,
         opacity: 0
       });
@@ -305,6 +318,8 @@ var VisNode = VisBase.extend({
     var stat = this.gitVisuals.getCommitUpstreamStatus(this.get('commit'));
     if (stat == 'head') {
       return GRAPHICS.headRectFill;
+    } else if (stat == 'tag') {
+      return GRAPHICS.orphanNodeFill;
     } else if (stat == 'none') {
       return GRAPHICS.orphanNodeFill;
     }
@@ -352,6 +367,10 @@ var VisNode = VisBase.extend({
 
   removeAll: function() {
     this.remove();
+    this.removeAllEdges();
+  },
+
+  removeAllEdges: function() {
     _.each(this.get('outgoingEdges'), function(edge) {
       edge.remove();
     }, this);
@@ -408,19 +427,25 @@ var VisNode = VisBase.extend({
     return stepFunc;
   },
 
-  genGraphics: function() {
-    var paper = this.gitVisuals.paper;
-
+  makeCircle: function(paper) {
     var pos = this.getScreenCoords();
-    var textPos = this.getTextScreenCoords();
-
-    var circle = paper.circle(
+    return paper.circle(
       pos.x,
       pos.y,
       this.getRadius()
     ).attr(this.getAttributes().circle);
+  },
 
-    var text = paper.text(textPos.x, textPos.y, String(this.get('id')));
+  makeText: function(paper) {
+    var textPos = this.getTextScreenCoords();
+    return paper.text(textPos.x, textPos.y, String(this.get('id')));
+  },
+
+  genGraphics: function() {
+    var paper = this.gitVisuals.paper;
+    var circle = this.makeCircle(paper);
+    var text = this.makeText(paper);
+
     text.attr({
       'font-size': this.getFontSize(this.get('id')),
       'font-weight': 'bold',
